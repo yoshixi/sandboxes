@@ -1,0 +1,14 @@
+compatibility_date = "2023-06-21"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "SESSION_KV"
+id = "a7a44522f0574841b9df747c4982f3f2"
+preview_id = "d947d39a6c4c4cdf9a18d3e67678aa78"
+
+[[d1_databases]]
+binding = "DB" # i.e. available in your Worker on env.DB
+database_name = "SAMPLE_DB"
+database_id = "927b9ec8-0dbd-48e3-bd61-5ff1cb94c0aa"
+migrations_dir = "db/migrate"
+

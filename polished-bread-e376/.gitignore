@@ -1,0 +1,14 @@
+.DS_Store
+node_modules
+/.cache
+.dev.vars
+/public/build
+/build
+.vscode
+.wrangler
+
+/.cache
+/functions/\[\[path\]\].js
+/functions/\[\[path\]\].js.map
+/functions/metafile.*
+/functions/version.txt

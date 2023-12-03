@@ -1,0 +1,15 @@
+{
+  "name": "youtubedl-sample",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "youtube-dl-exec": "^2.4.8"
+  }
+}
