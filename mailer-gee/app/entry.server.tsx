@@ -8,6 +8,7 @@ import type { AppLoadContext, EntryContext } from "@remix-run/cloudflare";
 import { RemixServer } from "@remix-run/react";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
+import initGoogleAuthenticator from "./services//auth//google-strategy.server";
 
 const ABORT_DELAY = 5000;
 
@@ -23,6 +24,15 @@ export default async function handleRequest(
 ) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), ABORT_DELAY);
+
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL } =
+    loadContext.cloudflare.env;
+  console.log(loadContext.cloudflare.env);
+  initGoogleAuthenticator({
+    clientID: GOOGLE_CLIENT_ID,
+    clientSecret: GOOGLE_CLIENT_SECRET,
+    callbackURL: GOOGLE_CALLBACK_URL,
+  });
 
   const body = await renderToReadableStream(
     <RemixServer
