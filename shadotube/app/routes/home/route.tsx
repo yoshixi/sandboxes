@@ -1,10 +1,11 @@
-import type { Route } from "./+types/home";
+import type { Route } from "../+types/home";
 
 import { YoutubeTranscript } from "youtube-transcript";
 import { Suspense, useState, useCallback, useRef, lazy } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { ReactPlayerProps } from "react-player/";
+import { ScriptPanel } from "./script-panel";
 
 const ReactPlayer = lazy(() => import("react-player"));
 
@@ -95,21 +96,14 @@ export default function Home({ actionData }: Route.ComponentProps) {
         </div>
         <div>
           {transcriptFetcher.data && (
-            <div>
-              {transcriptFetcher.data.transcripts.map((transcript, index) => (
-                <Button
-                  className="px-1"
-                  key={index}
-                  variant={"link"}
-                  onClick={() => {
-                    setDuration(transcript.duration);
-                    playerRef.current?.seekTo(transcript.offset);
-                  }}
-                >
-                  {transcript.text.replaceAll("&amp;#39;", "'")}
-                </Button>
-              ))}
-            </div>
+            <ScriptPanel
+              transcripts={transcriptFetcher.data?.transcripts || []}
+              currentWord={""}
+              onClickScript={(script) => {
+                setDuration(script.offset);
+                playerRef.current?.seekTo(script.offset);
+              }}
+            />
           )}
         </div>
       </div>
