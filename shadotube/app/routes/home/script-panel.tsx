@@ -7,16 +7,11 @@ import React from "react";
 import { TranscriptResponse } from "youtube-transcript";
 
 interface ScriptPanel {
-  transcripts: TranscriptResponse[];
-  currentWord: string;
-  onClickScript: (script: TranscriptResponse) => void;
+  left: React.ReactNode;
+  right: React.ReactNode;
 }
 
-export const ScriptPanel: React.FC<ScriptPanel> = ({
-  transcripts,
-  currentWord,
-  onClickScript,
-}) => {
+export const ScriptPanel: React.FC<ScriptPanel> = ({ right, left }) => {
   return (
     <div className="container mx-auto p-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -26,20 +21,7 @@ export const ScriptPanel: React.FC<ScriptPanel> = ({
             <CardTitle>Transcript</CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[70vh]">
-              {transcripts.map((transcript, index) => (
-                <Button
-                  className="px-1"
-                  key={index}
-                  variant={"link"}
-                  onClick={() => {
-                    onClickScript(transcript);
-                  }}
-                >
-                  {transcript.text.replaceAll("&amp;#39;", "'")}
-                </Button>
-              ))}
-            </ScrollArea>
+            <ScrollArea className="h-[70vh]">{left}</ScrollArea>
           </CardContent>
         </Card>
 
@@ -49,9 +31,7 @@ export const ScriptPanel: React.FC<ScriptPanel> = ({
             <CardTitle>Current Word</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-center h-[70vh]">
-              <h2 className="text-4xl font-bold">{currentWord}</h2>
-            </div>
+            <ScrollArea className="h-[70vh]">{right}</ScrollArea>
           </CardContent>
         </Card>
       </div>
