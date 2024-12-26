@@ -18,7 +18,9 @@ import { ScriptPanel } from "./script-panel";
 // Need to use fetcher to make requests since fetch is not available in remix to make json requests
 // https://github.com/remix-run/remix/discussions/8547
 import { useFetcher } from "react-router";
-import { useSpeechRecognition } from "./use-speech-recoginition";
+import { Recording } from "./use-speech-recoginition";
+
+import { speechRecognitionComp } from "./speech-recoginition.client";
 
 const ReactPlayer = lazy(() => import("react-player"));
 export async function action({ request }: Route.ActionArgs) {
@@ -65,9 +67,6 @@ export default function Home({ actionData }: Route.ComponentProps) {
   const [duration, setDuration] = useState(0);
   const playerRef = useRef(null);
 
-  const { startRecognition, stopRecognition, finishTexts, interimTexts } =
-    useSpeechRecognition();
-
   const transcriptLinks = useMemo(() => {
     if (!transcriptFetcher.data) {
       return null;
@@ -86,46 +85,6 @@ export default function Home({ actionData }: Route.ComponentProps) {
       </Button>
     ));
   }, [transcriptFetcher.data?.transcripts]);
-
-  const speechRecognitionComp = useMemo(() => {
-    return (
-      <div>
-        <div>
-          <Button
-            onClick={() =>
-              startRecognition({
-                lang: "en",
-                interimResults: true,
-                continuous: true,
-              })
-            }
-          >
-            Start Recognition
-          </Button>
-          <Button
-            onClick={() => {
-              console.log("stop recognition");
-              stopRecognition();
-            }}
-          >
-            Stop Recognition
-          </Button>
-        </div>
-        <div>
-          {finishTexts?.map((text, index) => (
-            <p key={index}>{text}</p>
-          ))}
-        </div>
-        <div>
-          {interimTexts?.map((text, index) => (
-            <span className="text-gray-300" key={index}>
-              {text}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }, [startRecognition, stopRecognition, finishTexts]);
 
   return (
     <main className="flex items-center justify-center pt-16 pb-4">
@@ -158,7 +117,12 @@ export default function Home({ actionData }: Route.ComponentProps) {
         </div>
         <div>
           {transcriptFetcher.data && (
-            <ScriptPanel left={transcriptLinks} right={speechRecognitionComp} />
+            <Suspense key={"recording"} fallback={<div>Loading...</div>}>
+              <ScriptPanel
+                left={transcriptLinks}
+                right={speechRecognitionComp}
+              />
+            </Suspense>
           )}
         </div>
       </div>

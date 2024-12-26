@@ -3,12 +3,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { o } from "node_modules/react-router/dist/production/fog-of-war-BDQTYoRQ.mjs";
-import React from "react";
+import React, { Suspense } from "react";
 import { TranscriptResponse } from "youtube-transcript";
 
 interface ScriptPanel {
   left: React.ReactNode;
-  right: React.ReactNode;
+  right: () => JSX.Element;
 }
 
 export const ScriptPanel: React.FC<ScriptPanel> = ({ right, left }) => {
@@ -31,7 +31,11 @@ export const ScriptPanel: React.FC<ScriptPanel> = ({ right, left }) => {
             <CardTitle>Current Word</CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[70vh]">{right}</ScrollArea>
+            <ScrollArea className="h-[70vh]">
+              <Suspense key={"recording"} fallback={<div>Loading...</div>}>
+                {right()}
+              </Suspense>
+            </ScrollArea>
           </CardContent>
         </Card>
       </div>

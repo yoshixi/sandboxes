@@ -1,5 +1,12 @@
-import { o } from "node_modules/react-router/dist/production/fog-of-war-BDQTYoRQ.mjs";
 import { useEffect, useRef, useState } from "react";
+import RecordRTC from "recordrtc";
+
+export interface Recording {
+  audioURL: string;
+  blob: Blob;
+  id: string;
+  recDate: string;
+}
 
 interface ISpeechRecognitionEventResultItem {
   isFinal: boolean;
@@ -66,6 +73,8 @@ interface ISpeechRecognitionResult {
  */
 export const useSpeechRecognition = () => {
   const recognition = useRef<ISpeechRecognition | undefined>();
+  const recorder = useRef<RecordRTC | undefined>();
+  const [recordings, setRecordings] = useState<Recording[]>();
 
   const [finishTexts, setFinishTexts] = useState<string[]>([]);
   const [interimTexts, setInterimTexts] = useState<string[]>([]);
@@ -93,11 +102,14 @@ export const useSpeechRecognition = () => {
     }
   }, [recognition, isRecording]);
 
-  const startRecognition = ({
+  const startRecognition = async ({
     lang,
     interimResults,
     continuous,
   }: IUseSpeechRecognition) => {
+    if (window === undefined) {
+      return;
+    }
     window.SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition.current = new SpeechRecognition();
@@ -110,21 +122,42 @@ export const useSpeechRecognition = () => {
     recognition.current.interimResults = interimResults;
     recognition.current.continuous = continuous;
 
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then(() => {
-        recognition.current?.start();
-        console.log("Recognition started");
-        setIsRecording(true);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recognition.current?.start();
+      setIsRecording(true);
+      const newRecorder = new RecordRTC(stream, { type: "audio" });
+      newRecorder.startRecording();
+      recorder.current = newRecorder;
+    } catch (e) {
+      console.error("error", e);
+    }
   };
 
   const stopRecognition = () => {
     recognition.current?.stop();
     recognition.current = undefined;
+    if (recorder.current) {
+      recorder.current.stopRecording(() => {
+        const blob = recorder.current?.getBlob();
+        if (!blob) {
+          console.error("failed to get recording blob");
+          return;
+        }
+        const audioURL = URL.createObjectURL(blob);
+        const id =
+          Math.random().toString(32).substring(2) +
+          new Date().getTime().toString(32);
+
+        const newRecording: Recording = {
+          audioURL,
+          blob,
+          id,
+          recDate: new Date().toISOString(),
+        };
+        setRecordings((prev) => [...(prev ? prev : []), newRecording]);
+      });
+    }
     setIsRecording(false);
   };
 
@@ -134,5 +167,6 @@ export const useSpeechRecognition = () => {
     finishTexts,
     interimTexts,
     isRecording,
+    recordings,
   };
 };
