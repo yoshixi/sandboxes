@@ -36,6 +36,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "f6f16934-b233-4fc2-8fa0-d1d850a27282"
+      }
+    },
+    "owner": "yoshixi"
   }
 }
