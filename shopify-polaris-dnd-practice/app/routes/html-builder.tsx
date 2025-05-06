@@ -1,330 +1,177 @@
-import { useState, useCallback } from "react";
-import { Page, Card, TextField, Icon } from "@shopify/polaris";
-import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { useState, useCallback, memo } from "react";
+import { Page, Layout, Card, Text, BlockStack } from "@shopify/polaris";
+import {
+  DndProvider,
+  useDrag,
+  useDrop,
+  DragSourceMonitor,
+  DropTargetMonitor,
+} from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { DeleteIcon } from "@shopify/polaris-icons";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 
-// --- Block Registry ---
-type BlockType = "section" | "text" | "textarea";
-interface BlockDef {
-  label: string;
-  canHaveChildren: boolean;
-  render: (props: any) => JSX.Element;
-}
-const BLOCKS: Record<BlockType, BlockDef> = {
-  section: {
-    label: "Section",
-    canHaveChildren: true,
-    render: ({ children }: any) => (
-      <div
-        style={{
-          border: "2px solid #d1d1d1",
-          borderRadius: 8,
-          marginBottom: 24,
-          padding: 16,
-          background: "#f9fafb",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Section</div>
-        <div>{children}</div>
-      </div>
-    ),
-  },
-  text: {
-    label: "Text",
-    canHaveChildren: false,
-    render: ({ value, setValue }: any) => (
-      <TextField
-        label="Text"
-        value={value}
-        onChange={setValue}
-        autoComplete="off"
-      />
-    ),
-  },
-  textarea: {
-    label: "Text Area",
-    canHaveChildren: false,
-    render: ({ value, setValue }: any) => (
-      <TextField
-        label="Text Area"
-        value={value}
-        onChange={setValue}
-        multiline
-        autoComplete="off"
-      />
-    ),
-  },
-};
+/* ------------------------------------------------------------------
+ Helper types & constants
+-------------------------------------------------------------------*/
 
-const BLOCK_TYPES = Object.keys(BLOCKS) as BlockType[];
+type SidebarItemType = "row" | "column" | "text";
 
-// --- Data Types ---
-interface BlockData {
+interface BuilderNode {
   id: string;
-  type: BlockType;
-  props?: any;
-  children?: BlockData[];
+  type: SidebarItemType;
+  children: BuilderNode[];
+  content?: string; // for text component
 }
 
-type DragItem = {
-  type: BlockType | "block" | "sidebar" | "trash";
-  block?: BlockData;
-  path?: string;
-  fromSidebar?: boolean;
+// Drag item shape
+interface DragItem {
+  id: string;
+  type: SidebarItemType;
+  path?: string; // If dragging an existing node, path represents its position in the layout tree
+  fromSidebar?: boolean; // Sidebar items set this true
+}
+
+const ItemTypes = {
+  NODE: "NODE",
 };
 
-function generateId() {
-  return Math.random().toString(36).substr(2, 9);
-}
+const SIDEBAR_ITEMS: { id: SidebarItemType; label: string }[] = [
+  { id: "row", label: "Row" },
+  { id: "column", label: "Column" },
+  { id: "text", label: "Text" },
+];
 
-// --- Sidebar ---
-function Sidebar() {
-  return (
-    <div style={{ width: 200, padding: 16, background: "#f6f6f7" }}>
-      <h3 style={{ marginBottom: 16 }}>Components</h3>
-      {BLOCK_TYPES.map((type) => (
-        <SidebarDraggableItem
-          key={type}
-          type={type}
-          label={BLOCKS[type].label}
-        />
-      ))}
-    </div>
-  );
-}
+/* ------------------------------------------------------------------
+ Utility helpers to manipulate the layout tree by path
+-------------------------------------------------------------------*/
 
-function SidebarDraggableItem({
-  type,
-  label,
+// Convert path string (e.g. "0-1-2") to array of numbers
+const pathToIndices = (path: string): number[] =>
+  path.split("-").map((n) => parseInt(n, 10));
+
+const traverse = (
+  tree: BuilderNode[],
+  callback: (
+    node: BuilderNode,
+    idx: number,
+    parent: BuilderNode[] | null
+  ) => void,
+  path: number[] = []
+) => {
+  const parentArr =
+    path.length === 0 ? tree : getNodeByPath(tree, path.slice(0, -1))?.children;
+  path.forEach(() => {}); // dummy to use path param (linter)
+  if (!parentArr) return;
+  parentArr.forEach((node, idx) => callback(node, idx, parentArr));
+};
+
+const getNodeByPath = (
+  tree: BuilderNode[],
+  path: number[]
+): BuilderNode | null => {
+  let current: BuilderNode | null = null;
+  let arr: BuilderNode[] = tree;
+  for (const idx of path) {
+    current = arr[idx];
+    if (!current) return null;
+    arr = current.children;
+  }
+  return current;
+};
+
+const removeAtPath = (
+  tree: BuilderNode[],
+  path: number[]
+): { removed: BuilderNode | null; newTree: BuilderNode[] } => {
+  if (path.length === 0) return { removed: null, newTree: tree };
+  const newTree = structuredClone(tree) as BuilderNode[];
+  const parentPath = path.slice(0, -1);
+  const idx = path[path.length - 1];
+  const parent = parentPath.length ? getNodeByPath(newTree, parentPath) : null;
+  const arr = parent ? parent.children : newTree;
+  if (!arr || idx >= arr.length) return { removed: null, newTree };
+  const [removed] = arr.splice(idx, 1);
+  return { removed, newTree };
+};
+
+/**
+ * Inserts a node at a specific path in the tree structure
+ *
+ * @param tree - The current tree structure of nodes (array of BuilderNodes)
+ * @param path - Array of indices representing the insertion position
+ *               If path is [0,1,2], inserts as 3rd child (index 2) of 2nd child (index 1) of 1st node (index 0)
+ *               If path is empty, inserts at beginning of root level
+ * @param item - The BuilderNode to insert at the specified position
+ * @returns A new tree with the item inserted (original tree is not mutated)
+ *
+ * The function:
+ * 1. Creates a deep clone of the tree
+ * 2. Handles special case: empty path (insert at beginning of root)
+ * 3. For non-empty paths: finds parent node, then inserts item at specified index in parent's children
+ * 4. Returns the new tree with inserted node
+ */
+const insertAtPath = (
+  tree: BuilderNode[],
+  path: number[],
+  item: BuilderNode
+): BuilderNode[] => {
+  const newTree = structuredClone(tree) as BuilderNode[];
+  if (path.length === 0) {
+    newTree.splice(0, 0, item);
+    return newTree;
+  }
+  const parentPath = path.slice(0, -1); // parentPath = [0,1]
+  const idx = path[path.length - 1]; // idx = 2
+  console.log("insertAtPath", path, parentPath, idx);
+  const parent = parentPath.length ? getNodeByPath(newTree, parentPath) : null; // parent = newTree[0].children[1]
+  const beforeNewTree = structuredClone(newTree);
+  const arr = parent ? parent.children : newTree; // arr = newTree[0].children[1].children
+  arr.splice(idx, 0, item); // newTree[0].children[1].children = [item]
+  console.log("insertAtPath", beforeNewTree, newTree);
+  return newTree;
+};
+
+const generateId = () => Math.random().toString(36).substring(2, 9);
+
+/* ------------------------------------------------------------------
+ SidebarItem
+-------------------------------------------------------------------*/
+
+const SidebarItem = memo(function SidebarItem({
+  item,
 }: {
-  type: BlockType;
-  label: string;
+  item: { id: SidebarItemType; label: string };
 }) {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: "sidebar",
-    item: { type, fromSidebar: true },
-    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  const [, drag] = useDrag<DragItem>(() => ({
+    type: ItemTypes.NODE,
+    item: () => ({ id: generateId(), type: item.id, fromSidebar: true }),
   }));
   return (
     <div
       ref={drag}
-      style={{
-        opacity: isDragging ? 0.5 : 1,
-        padding: 8,
-        marginBottom: 8,
-        background: "white",
-        border: "1px solid #d1d1d1",
-        borderRadius: 4,
-        cursor: "grab",
-      }}
+      className="cursor-pointer rounded border p-2 mb-2 bg-white hover:bg-gray-50 shadow-sm"
     >
-      {label}
+      {item.label}
     </div>
   );
-}
+});
 
-// --- Trash Drop Zone ---
-function TrashDropZone({ onDrop }: { onDrop: (path: string) => void }) {
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
-    accept: ["block"],
-    drop: (item: DragItem) => {
-      if (item.path) onDrop(item.path);
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop(),
-    }),
-  }));
-  return (
-    <div
-      ref={drop}
-      style={{
-        margin: 16,
-        padding: 16,
-        background: isOver && canDrop ? "#ffeaea" : "#fff",
-        border: `2px dashed ${isOver && canDrop ? "#d82c0d" : "#d1d1d1"}`,
-        borderRadius: 8,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#d82c0d",
-        fontWeight: 600,
-      }}
-    >
-      <Icon source={DeleteIcon} tone="critical" />
-      <span style={{ marginLeft: 8 }}>Drag here to delete</span>
-    </div>
-  );
-}
+/* ------------------------------------------------------------------
+ DropZone component
+-------------------------------------------------------------------*/
 
-// --- Editor ---
-function Editor({
-  blocks,
-  setBlocks,
-}: {
-  blocks: BlockData[];
-  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
-}) {
-  // Remove block by path
-  const handleRemove = useCallback(
-    (path: string) => {
-      setBlocks(removeBlockAtPath(blocks, path).newBlocks);
-    },
-    [blocks, setBlocks]
-  );
-
-  // Drop handler for root drop zones
-  const handleDrop = useCallback(
-    (item: DragItem, index: number) => {
-      console.log("blocks", blocks);
-      if (item.fromSidebar && item.type && typeof item.type === "string") {
-        // Add new block from sidebar
-        const newBlock: BlockData = {
-          id: generateId(),
-          type: item.type as BlockType,
-          props: {},
-          children: BLOCKS[item.type as BlockType].canHaveChildren
-            ? []
-            : undefined,
-        };
-        setBlocks((prevBlocks) =>
-          insertBlockAt(prevBlocks, null, index, newBlock)
-        );
-      } else if (item.path) {
-        // Move block
-        setBlocks(moveBlockTo(blocks, item.path, null, index));
-      }
-    },
-    [blocks, setBlocks]
-  );
-
-  // Root drop zone
-  const [, drop] = useDrop(() => ({
-    accept: ["sidebar", "block"],
-    drop: (item: DragItem, monitor) => {
-      if (!monitor.didDrop()) {
-        handleDrop(item, blocks.length);
-      }
-    },
-  }));
-
-  return (
-    <div
-      ref={drop}
-      style={{
-        flex: 1,
-        minHeight: 500,
-        margin: 32,
-        background: "#fff",
-        borderRadius: 8,
-        padding: 24,
-        position: "relative",
-      }}
-    >
-      {blocks.length === 0 && (
-        <div style={{ color: "#bbb", textAlign: "center", marginTop: 100 }}>
-          Drag a Section here
-        </div>
-      )}
-      {blocks.map((block, idx) => (
-        <BlockWithDropZones
-          key={block.id}
-          block={block}
-          path={String(idx)}
-          parentPath={null}
-          setBlocks={setBlocks}
-          blocks={blocks}
-          index={idx}
-          handleRemove={handleRemove}
-        />
-      ))}
-      <DropZone
-        parentPath={null}
-        index={blocks.length}
-        setBlocks={setBlocks}
-        blocks={blocks}
-        isLast
-      />
-      <TrashDropZone onDrop={handleRemove} />
-    </div>
-  );
-}
-
-// --- Block With Drop Zones ---
-function BlockWithDropZones({
-  block,
-  path,
-  parentPath,
-  setBlocks,
-  blocks,
-  index,
-  handleRemove,
-}: {
-  block: BlockData;
-  path: string;
-  parentPath: string | null;
-  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
-  blocks: BlockData[];
-  index: number;
-  handleRemove: (path: string) => void;
-}) {
-  // Drop zone before this block
-  return (
-    <>
-      <DropZone
-        parentPath={parentPath}
-        index={index}
-        setBlocks={setBlocks}
-        blocks={blocks}
-      />
-      <BlockRenderer
-        block={block}
-        path={path}
-        setBlocks={setBlocks}
-        blocks={blocks}
-        handleRemove={handleRemove}
-      />
-    </>
-  );
-}
-
-// --- DropZone ---
-function DropZone({
-  parentPath,
-  index,
-  setBlocks,
-  blocks,
-  isLast,
-}: {
-  parentPath: string | null;
-  index: number;
-  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
-  blocks: BlockData[];
+interface DropZoneProps {
+  path: string; // where to insert if dropped before this path
+  onDrop: (item: DragItem, dropZonePath: string) => void;
   isLast?: boolean;
-}) {
+}
+
+const DropZone = ({ path, onDrop, isLast }: DropZoneProps) => {
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
-    accept: ["sidebar", "block"],
+    accept: ItemTypes.NODE,
     drop: (item: DragItem, monitor) => {
-      if (!monitor.didDrop()) {
-        if (item.fromSidebar && item.type && typeof item.type === "string") {
-          // Add new block from sidebar
-          const newBlock: BlockData = {
-            id: generateId(),
-            type: item.type as BlockType,
-            props: {},
-            children: BLOCKS[item.type as BlockType].canHaveChildren
-              ? []
-              : undefined,
-          };
-          setBlocks((prevBlocks) =>
-            insertBlockAt(prevBlocks, parentPath, index, newBlock)
-          );
-        } else if (item.path) {
-          // Move block
-          setBlocks(moveBlockTo(blocks, item.path, parentPath, index));
-        }
-      }
+      if (monitor.didDrop()) return;
+      onDrop(item, path);
     },
     collect: (monitor) => ({
       isOver: monitor.isOver({ shallow: true }),
@@ -334,190 +181,205 @@ function DropZone({
   return (
     <div
       ref={drop}
-      style={{
-        height: 10,
-        margin: "4px 0",
-        background: isOver && canDrop ? "#b6e0fe" : "transparent",
-        borderTop:
-          isOver && canDrop ? "2px solid #007ace" : "2px solid transparent",
-        transition: "background 0.15s, border 0.15s",
-      }}
+      data-path={path}
+      className={`h-4 ${isLast ? "mb-2" : ""} ${
+        isOver && canDrop ? "bg-blue-400" : "bg-transparent"
+      }`}
     />
   );
+};
+
+/* ------------------------------------------------------------------
+ Builder Nodes Components
+-------------------------------------------------------------------*/
+
+interface NodeProps {
+  node: BuilderNode;
+  path: string;
+  onDrop: (item: DragItem, dropZonePath: string) => void;
 }
 
-// --- Block Renderer ---
-function BlockRenderer({
-  block,
-  path,
-  setBlocks,
-  blocks,
-  handleRemove,
-}: {
-  block: BlockData;
-  path: string;
-  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
-  blocks: BlockData[];
-  handleRemove: (path: string) => void;
-}) {
-  const [{ isDragging }, drag, preview] = useDrag(
+const RowNode = ({ node, path, onDrop }: NodeProps) => {
+  const [, drag, preview] = useDrag<DragItem>(
     () => ({
-      type: "block",
-      item: { type: "block", block, path },
-      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+      type: ItemTypes.NODE,
+      item: { id: node.id, type: node.type, path },
     }),
-    [block, path]
+    [node, path]
   );
 
-  const blockDef = BLOCKS[block.type];
-  const [value, setValue] = useState(block.props?.value || "");
-  const renderProps = blockDef.canHaveChildren ? {} : { value, setValue };
-  const children = block.children || [];
-
   return (
-    <div
-      ref={drag}
-      style={{
-        opacity: isDragging ? 0.5 : 1,
-        marginBottom: 8,
-        position: "relative",
-      }}
-    >
-      <div style={{ position: "absolute", top: 4, right: 4, zIndex: 2 }}>
-        <button
-          onClick={() => handleRemove(path)}
-          style={{ background: "none", border: "none", cursor: "pointer" }}
-          title="Delete"
-        >
-          <Icon source={DeleteIcon} tone="critical" />
-        </button>
+    <div ref={preview} className="border rounded p-2 mb-2 bg-gray-100">
+      <div ref={drag} className="font-semibold mb-1 cursor-move">
+        Row
       </div>
-      {blockDef.render({
-        ...renderProps,
-        children: blockDef.canHaveChildren ? (
-          <>
-            {children.length === 0 && (
-              <div style={{ color: "#bbb", fontSize: 13, minHeight: 32 }}>
-                Drag elements here
-              </div>
+      {node.children.map((child, idx) => {
+        const childPath = `${path}-${idx}`;
+        return (
+          <div key={child.id} className="pl-2">
+            <DropZone path={childPath} onDrop={onDrop} />
+            <NodeRenderer node={child} path={childPath} onDrop={onDrop} />
+            {idx === node.children.length - 1 && (
+              <DropZone path={`${childPath}-end`} isLast onDrop={onDrop} />
             )}
-            {children.map((child, idx) => (
-              <BlockWithDropZones
-                key={child.id}
-                block={child}
-                path={path + "." + idx}
-                parentPath={path}
-                setBlocks={setBlocks}
-                blocks={blocks}
-                index={idx}
-                handleRemove={handleRemove}
-              />
-            ))}
-            <DropZone
-              parentPath={path}
-              index={children.length}
-              setBlocks={setBlocks}
-              blocks={blocks}
-              isLast
-            />
-          </>
-        ) : null,
+          </div>
+        );
       })}
+      {node.children.length === 0 && (
+        <DropZone path={`${path}-0`} isLast onDrop={onDrop} />
+      )}
     </div>
   );
-}
+};
 
-// --- Helpers for block tree manipulation ---
-function insertBlockAt(
-  blocks: BlockData[],
-  parentPath: string | null,
-  index: number,
-  newBlock: BlockData
-): BlockData[] {
-  if (parentPath === null) {
-    const updated = [...blocks];
-    updated.splice(index, 0, newBlock);
-    return updated;
-  }
-  const parts = parentPath.split(".").map(Number);
-  const idx = parts[0];
-  if (parts.length === 1) {
-    const updated = [...blocks];
-    const parent = updated[idx];
-    if (!BLOCKS[parent.type].canHaveChildren) return blocks;
-    const children = parent.children ? [...parent.children] : [];
-    children.splice(index, 0, newBlock);
-    updated[idx] = { ...parent, children };
-    return updated;
-  }
-  return [
-    ...blocks.slice(0, idx),
-    {
-      ...blocks[idx],
-      children: insertBlockAt(
-        blocks[idx].children || [],
-        parts.slice(1).join("."),
-        index,
-        newBlock
-      ),
-    },
-    ...blocks.slice(idx + 1),
-  ];
-}
+const ColumnNode = ({ node, path, onDrop }: NodeProps) => {
+  const [, drag, preview] = useDrag<DragItem>(() => ({
+    type: ItemTypes.NODE,
+    item: { id: node.id, type: node.type, path },
+  }));
 
-function moveBlockTo(
-  blocks: BlockData[],
-  fromPath: string,
-  toParentPath: string | null,
-  toIndex: number
-): BlockData[] {
-  // Remove block from fromPath
-  const { block: movingBlock, newBlocks } = removeBlockAtPath(blocks, fromPath);
-  if (!movingBlock) return blocks;
-  return insertBlockAt(newBlocks, toParentPath, toIndex, movingBlock);
-}
-
-function removeBlockAtPath(
-  blocks: BlockData[],
-  path: string
-): { block: BlockData | null; newBlocks: BlockData[] } {
-  const parts = path.split(".").map(Number);
-  if (parts.length === 1) {
-    const idx = parts[0];
-    const block = blocks[idx];
-    return {
-      block,
-      newBlocks: [...blocks.slice(0, idx), ...blocks.slice(idx + 1)],
-    };
-  }
-  const idx = parts[0];
-  const { block, newBlocks } = removeBlockAtPath(
-    blocks[idx].children || [],
-    parts.slice(1).join(".")
-  );
-  return {
-    block,
-    newBlocks: [
-      ...blocks.slice(0, idx),
-      { ...blocks[idx], children: newBlocks },
-      ...blocks.slice(idx + 1),
-    ],
-  };
-}
-
-// --- Main ---
-export default function HtmlBuilder() {
-  const [blocks, setBlocks] = useState<BlockData[]>([]);
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div style={{ display: "flex", height: "100vh", background: "#f9fafb" }}>
-        <Sidebar />
-        <Page title="No-code HTML Builder">
-          <Card>
-            <Editor blocks={blocks} setBlocks={setBlocks} />
-          </Card>
-        </Page>
+    <div ref={preview} className="border dashed rounded p-2 mb-2 bg-gray-50">
+      <div ref={drag} className="italic mb-1 cursor-move text-sm text-gray-700">
+        Column
       </div>
-    </DndProvider>
+      {node.children.map((child, idx) => {
+        const childPath = `${path}-${idx}`;
+        return (
+          <div key={child.id}>
+            <DropZone path={childPath} onDrop={onDrop} />
+            <NodeRenderer node={child} path={childPath} onDrop={onDrop} />
+            {idx === node.children.length - 1 && (
+              <DropZone path={`${childPath}-end`} isLast onDrop={onDrop} />
+            )}
+          </div>
+        );
+      })}
+      {node.children.length === 0 && (
+        <DropZone path={`${path}-0`} isLast onDrop={onDrop} />
+      )}
+    </div>
+  );
+};
+
+const TextNode = ({ node, path }: NodeProps) => {
+  const [, drag, preview] = useDrag<DragItem>(() => ({
+    type: ItemTypes.NODE,
+    item: { id: node.id, type: node.type, path },
+  }));
+  return (
+    <div ref={preview} className="p-2 bg-white rounded shadow-sm mb-2">
+      <div ref={drag} className="cursor-move text-gray-500 text-xs">
+        Text
+      </div>
+      <p className="mt-1">Sample text content</p>
+    </div>
+  );
+};
+
+const NodeRenderer = ({ node, path, onDrop }: NodeProps) => {
+  switch (node.type) {
+    case "row":
+      return <RowNode node={node} path={path} onDrop={onDrop} />;
+    case "column":
+      return <ColumnNode node={node} path={path} onDrop={onDrop} />;
+    case "text":
+    default:
+      return <TextNode node={node} path={path} onDrop={onDrop} />;
+  }
+};
+
+/* ------------------------------------------------------------------
+ Main Builder component
+-------------------------------------------------------------------*/
+
+export default function HtmlBuilderRoute() {
+  const [layout, setLayout] = useState<BuilderNode[]>([]);
+
+  const handleDrop = useCallback(
+    (dragItem: DragItem, dropZonePathStr: string) => {
+      const dropPathIndices = dropZonePathStr.includes("end")
+        ? pathToIndices(dropZonePathStr.replace("-end", ""))
+        : pathToIndices(dropZonePathStr);
+
+      // Use functional setState to guarantee we're using the latest state
+      setLayout((currentLayout) => {
+        // Create a clone of current layout to avoid mutation
+        let newTree = structuredClone(currentLayout);
+        let itemNode: BuilderNode;
+
+        if (dragItem.fromSidebar) {
+          // create new node from sidebar
+          console.log("from sidebar", dragItem);
+          itemNode = {
+            id: dragItem.id,
+            type: dragItem.type,
+            children: dragItem.type === "text" ? [] : [],
+          };
+        } else if (dragItem.path) {
+          console.log("from existing", dragItem);
+          // moving existing node
+          const removeRes = removeAtPath(newTree, pathToIndices(dragItem.path));
+          itemNode = removeRes.removed!;
+          newTree = removeRes.newTree;
+        } else {
+          return currentLayout;
+        }
+
+        // For simplicity, we always insert as sibling at dropPath index
+        const insertPath = dropPathIndices;
+        const updated = insertAtPath(newTree, insertPath, itemNode);
+        console.log("handleDrop", newTree, updated);
+        return [...updated];
+      });
+    },
+    [] // No dependencies needed since we're using the function form of setState
+  );
+
+  return (
+    <Page title="HTML Builder">
+      <DndProvider backend={HTML5Backend}>
+        <Layout>
+          <Layout.Section variant="oneThird">
+            <Card padding="400">
+              {SIDEBAR_ITEMS.map((item) => (
+                <SidebarItem key={item.id} item={item} />
+              ))}
+            </Card>
+          </Layout.Section>
+          <Layout.Section>
+            <Card padding="400">
+              {/* initial dropzone */}
+              {layout.length === 0 && (
+                <DropZone path="0" onDrop={handleDrop} isLast />
+              )}
+              {layout.map((node, idx) => {
+                const path = `${idx}`;
+                return (
+                  <div key={node.id}>
+                    <DropZone
+                      data-path={path}
+                      path={path}
+                      onDrop={handleDrop}
+                    />
+                    <NodeRenderer node={node} path={path} onDrop={handleDrop} />
+                    {/* last dropzone */}
+                    {idx === layout.length - 1 && (
+                      <DropZone
+                        path={`${idx + 1}-end`}
+                        isLast
+                        onDrop={handleDrop}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </Card>
+          </Layout.Section>
+        </Layout>
+      </DndProvider>
+    </Page>
   );
 }
+
+export const meta: MetaFunction = () => [{ title: "HTML Builder" }];
