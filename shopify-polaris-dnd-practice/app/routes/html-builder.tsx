@@ -1,5 +1,8 @@
-import { useState } from "react";
-import { Page, Card, TextField } from "@shopify/polaris";
+import { useState, useCallback } from "react";
+import { Page, Card, TextField, Icon } from "@shopify/polaris";
+import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import { DeleteIcon } from "@shopify/polaris-icons";
 
 // --- Block Registry ---
 type BlockType = "section" | "text" | "textarea";
@@ -64,6 +67,13 @@ interface BlockData {
   children?: BlockData[];
 }
 
+type DragItem = {
+  type: BlockType | "block" | "sidebar" | "trash";
+  block?: BlockData;
+  path?: string;
+  fromSidebar?: boolean;
+};
+
 function generateId() {
   return Math.random().toString(36).substr(2, 9);
 }
@@ -91,10 +101,16 @@ function SidebarDraggableItem({
   type: BlockType;
   label: string;
 }) {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: "sidebar",
+    item: { type, fromSidebar: true },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  }));
   return (
     <div
-      draggable
+      ref={drag}
       style={{
+        opacity: isDragging ? 0.5 : 1,
         padding: 8,
         marginBottom: 8,
         background: "white",
@@ -102,12 +118,42 @@ function SidebarDraggableItem({
         borderRadius: 4,
         cursor: "grab",
       }}
-      onDragStart={(e) => {
-        e.dataTransfer.setData("block-type", type);
-        e.dataTransfer.setData("from-sidebar", "true");
-      }}
     >
       {label}
+    </div>
+  );
+}
+
+// --- Trash Drop Zone ---
+function TrashDropZone({ onDrop }: { onDrop: (path: string) => void }) {
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+    accept: ["block"],
+    drop: (item: DragItem) => {
+      if (item.path) onDrop(item.path);
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+    }),
+  }));
+  return (
+    <div
+      ref={drop}
+      style={{
+        margin: 16,
+        padding: 16,
+        background: isOver && canDrop ? "#ffeaea" : "#fff",
+        border: `2px dashed ${isOver && canDrop ? "#d82c0d" : "#d1d1d1"}`,
+        borderRadius: 8,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#d82c0d",
+        fontWeight: 600,
+      }}
+    >
+      <Icon source={DeleteIcon} tone="critical" />
+      <span style={{ marginLeft: 8 }}>Drag here to delete</span>
     </div>
   );
 }
@@ -118,42 +164,54 @@ function Editor({
   setBlocks,
 }: {
   blocks: BlockData[];
-  setBlocks: (b: BlockData[]) => void;
+  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
 }) {
-  // Drag state for moving blocks
-  const [draggedBlockPath, setDraggedBlockPath] = useState<string | null>(null);
+  // Remove block by path
+  const handleRemove = useCallback(
+    (path: string) => {
+      setBlocks(removeBlockAtPath(blocks, path).newBlocks);
+    },
+    [blocks, setBlocks]
+  );
 
-  // Drop new block from sidebar
-  const handleDropNewBlock = (
-    e: React.DragEvent,
-    parentPath: string | null = null
-  ) => {
-    const type = e.dataTransfer.getData("block-type") as BlockType;
-    const fromSidebar = e.dataTransfer.getData("from-sidebar");
-    if (!type || !(type in BLOCKS)) return;
-    if (fromSidebar === "true") {
-      // Add new block
-      const newBlock: BlockData = {
-        id: generateId(),
-        type,
-        props: {},
-        children: BLOCKS[type].canHaveChildren ? [] : undefined,
-      };
-      if (parentPath === null) {
-        setBlocks([...blocks, newBlock]);
-      } else {
-        setBlocks(addBlockAtPath(blocks, parentPath, newBlock));
+  // Drop handler for root drop zones
+  const handleDrop = useCallback(
+    (item: DragItem, index: number) => {
+      console.log("blocks", blocks);
+      if (item.fromSidebar && item.type && typeof item.type === "string") {
+        // Add new block from sidebar
+        const newBlock: BlockData = {
+          id: generateId(),
+          type: item.type as BlockType,
+          props: {},
+          children: BLOCKS[item.type as BlockType].canHaveChildren
+            ? []
+            : undefined,
+        };
+        setBlocks((prevBlocks) =>
+          insertBlockAt(prevBlocks, null, index, newBlock)
+        );
+      } else if (item.path) {
+        // Move block
+        setBlocks(moveBlockTo(blocks, item.path, null, index));
       }
-    } else if (draggedBlockPath) {
-      // Move existing block
-      setBlocks(moveBlock(blocks, draggedBlockPath, parentPath));
-      setDraggedBlockPath(null);
-    }
-  };
+    },
+    [blocks, setBlocks]
+  );
 
-  // Recursive renderer
+  // Root drop zone
+  const [, drop] = useDrop(() => ({
+    accept: ["sidebar", "block"],
+    drop: (item: DragItem, monitor) => {
+      if (!monitor.didDrop()) {
+        handleDrop(item, blocks.length);
+      }
+    },
+  }));
+
   return (
     <div
+      ref={drop}
       style={{
         flex: 1,
         minHeight: 500,
@@ -161,9 +219,8 @@ function Editor({
         background: "#fff",
         borderRadius: 8,
         padding: 24,
+        position: "relative",
       }}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => handleDropNewBlock(e, null)}
     >
       {blocks.length === 0 && (
         <div style={{ color: "#bbb", textAlign: "center", marginTop: 100 }}>
@@ -171,15 +228,121 @@ function Editor({
         </div>
       )}
       {blocks.map((block, idx) => (
-        <BlockRenderer
+        <BlockWithDropZones
           key={block.id}
           block={block}
           path={String(idx)}
-          setDraggedBlockPath={setDraggedBlockPath}
-          handleDropNewBlock={handleDropNewBlock}
+          parentPath={null}
+          setBlocks={setBlocks}
+          blocks={blocks}
+          index={idx}
+          handleRemove={handleRemove}
         />
       ))}
+      <DropZone
+        parentPath={null}
+        index={blocks.length}
+        setBlocks={setBlocks}
+        blocks={blocks}
+        isLast
+      />
+      <TrashDropZone onDrop={handleRemove} />
     </div>
+  );
+}
+
+// --- Block With Drop Zones ---
+function BlockWithDropZones({
+  block,
+  path,
+  parentPath,
+  setBlocks,
+  blocks,
+  index,
+  handleRemove,
+}: {
+  block: BlockData;
+  path: string;
+  parentPath: string | null;
+  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
+  blocks: BlockData[];
+  index: number;
+  handleRemove: (path: string) => void;
+}) {
+  // Drop zone before this block
+  return (
+    <>
+      <DropZone
+        parentPath={parentPath}
+        index={index}
+        setBlocks={setBlocks}
+        blocks={blocks}
+      />
+      <BlockRenderer
+        block={block}
+        path={path}
+        setBlocks={setBlocks}
+        blocks={blocks}
+        handleRemove={handleRemove}
+      />
+    </>
+  );
+}
+
+// --- DropZone ---
+function DropZone({
+  parentPath,
+  index,
+  setBlocks,
+  blocks,
+  isLast,
+}: {
+  parentPath: string | null;
+  index: number;
+  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
+  blocks: BlockData[];
+  isLast?: boolean;
+}) {
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+    accept: ["sidebar", "block"],
+    drop: (item: DragItem, monitor) => {
+      if (!monitor.didDrop()) {
+        if (item.fromSidebar && item.type && typeof item.type === "string") {
+          // Add new block from sidebar
+          const newBlock: BlockData = {
+            id: generateId(),
+            type: item.type as BlockType,
+            props: {},
+            children: BLOCKS[item.type as BlockType].canHaveChildren
+              ? []
+              : undefined,
+          };
+          setBlocks((prevBlocks) =>
+            insertBlockAt(prevBlocks, parentPath, index, newBlock)
+          );
+        } else if (item.path) {
+          // Move block
+          setBlocks(moveBlockTo(blocks, item.path, parentPath, index));
+        }
+      }
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver({ shallow: true }),
+      canDrop: monitor.canDrop(),
+    }),
+  }));
+  return (
+    <div
+      ref={drop}
+      style={{
+        height: 10,
+        margin: "4px 0",
+        background: isOver && canDrop ? "#b6e0fe" : "transparent",
+        borderTop:
+          isOver && canDrop ? "2px solid #007ace" : "2px solid transparent",
+        transition: "background 0.15s, border 0.15s",
+      }}
+    />
   );
 }
 
@@ -187,80 +350,114 @@ function Editor({
 function BlockRenderer({
   block,
   path,
-  setDraggedBlockPath,
-  handleDropNewBlock,
+  setBlocks,
+  blocks,
+  handleRemove,
 }: {
   block: BlockData;
   path: string;
-  setDraggedBlockPath: (p: string | null) => void;
-  handleDropNewBlock: (e: React.DragEvent, parentPath: string) => void;
+  setBlocks: React.Dispatch<React.SetStateAction<BlockData[]>>;
+  blocks: BlockData[];
+  handleRemove: (path: string) => void;
 }) {
-  const [value, setValue] = useState(block.props?.value || "");
+  const [{ isDragging }, drag, preview] = useDrag(
+    () => ({
+      type: "block",
+      item: { type: "block", block, path },
+      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+    }),
+    [block, path]
+  );
+
   const blockDef = BLOCKS[block.type];
-  // For leaf blocks, update value in local state only (for demo)
+  const [value, setValue] = useState(block.props?.value || "");
   const renderProps = blockDef.canHaveChildren ? {} : { value, setValue };
+  const children = block.children || [];
 
   return (
     <div
-      draggable
-      onDragStart={() => setDraggedBlockPath(path)}
-      onDrop={(e) => {
-        e.stopPropagation();
-        handleDropNewBlock(e, path);
+      ref={drag}
+      style={{
+        opacity: isDragging ? 0.5 : 1,
+        marginBottom: 8,
+        position: "relative",
       }}
-      onDragOver={(e) => e.preventDefault()}
-      style={{ marginBottom: 8 }}
     >
+      <div style={{ position: "absolute", top: 4, right: 4, zIndex: 2 }}>
+        <button
+          onClick={() => handleRemove(path)}
+          style={{ background: "none", border: "none", cursor: "pointer" }}
+          title="Delete"
+        >
+          <Icon source={DeleteIcon} tone="critical" />
+        </button>
+      </div>
       {blockDef.render({
         ...renderProps,
-        children:
-          blockDef.canHaveChildren && block.children ? (
-            block.children.length === 0 ? (
+        children: blockDef.canHaveChildren ? (
+          <>
+            {children.length === 0 && (
               <div style={{ color: "#bbb", fontSize: 13, minHeight: 32 }}>
                 Drag elements here
               </div>
-            ) : (
-              block.children.map((child, idx) => (
-                <BlockRenderer
-                  key={child.id}
-                  block={child}
-                  path={path + "." + idx}
-                  setDraggedBlockPath={setDraggedBlockPath}
-                  handleDropNewBlock={handleDropNewBlock}
-                />
-              ))
-            )
-          ) : null,
+            )}
+            {children.map((child, idx) => (
+              <BlockWithDropZones
+                key={child.id}
+                block={child}
+                path={path + "." + idx}
+                parentPath={path}
+                setBlocks={setBlocks}
+                blocks={blocks}
+                index={idx}
+                handleRemove={handleRemove}
+              />
+            ))}
+            <DropZone
+              parentPath={path}
+              index={children.length}
+              setBlocks={setBlocks}
+              blocks={blocks}
+              isLast
+            />
+          </>
+        ) : null,
       })}
     </div>
   );
 }
 
 // --- Helpers for block tree manipulation ---
-function addBlockAtPath(
+function insertBlockAt(
   blocks: BlockData[],
-  path: string,
+  parentPath: string | null,
+  index: number,
   newBlock: BlockData
 ): BlockData[] {
-  const parts = path.split(".").map(Number);
-  if (parts.length === 1) {
-    const idx = parts[0];
+  if (parentPath === null) {
     const updated = [...blocks];
-    if (!BLOCKS[blocks[idx].type].canHaveChildren) return blocks;
-    updated[idx] = {
-      ...blocks[idx],
-      children: [...(blocks[idx].children || []), newBlock],
-    };
+    updated.splice(index, 0, newBlock);
     return updated;
   }
+  const parts = parentPath.split(".").map(Number);
   const idx = parts[0];
+  if (parts.length === 1) {
+    const updated = [...blocks];
+    const parent = updated[idx];
+    if (!BLOCKS[parent.type].canHaveChildren) return blocks;
+    const children = parent.children ? [...parent.children] : [];
+    children.splice(index, 0, newBlock);
+    updated[idx] = { ...parent, children };
+    return updated;
+  }
   return [
     ...blocks.slice(0, idx),
     {
       ...blocks[idx],
-      children: addBlockAtPath(
+      children: insertBlockAt(
         blocks[idx].children || [],
         parts.slice(1).join("."),
+        index,
         newBlock
       ),
     },
@@ -268,19 +465,16 @@ function addBlockAtPath(
   ];
 }
 
-function moveBlock(
+function moveBlockTo(
   blocks: BlockData[],
   fromPath: string,
-  toPath: string | null
+  toParentPath: string | null,
+  toIndex: number
 ): BlockData[] {
   // Remove block from fromPath
   const { block: movingBlock, newBlocks } = removeBlockAtPath(blocks, fromPath);
   if (!movingBlock) return blocks;
-  if (toPath === null) {
-    // Move to root
-    return [...newBlocks, movingBlock];
-  }
-  return addBlockAtPath(newBlocks, toPath, movingBlock);
+  return insertBlockAt(newBlocks, toParentPath, toIndex, movingBlock);
 }
 
 function removeBlockAtPath(
@@ -315,13 +509,15 @@ function removeBlockAtPath(
 export default function HtmlBuilder() {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#f9fafb" }}>
-      <Sidebar />
-      <Page title="No-code HTML Builder">
-        <Card>
-          <Editor blocks={blocks} setBlocks={setBlocks} />
-        </Card>
-      </Page>
-    </div>
+    <DndProvider backend={HTML5Backend}>
+      <div style={{ display: "flex", height: "100vh", background: "#f9fafb" }}>
+        <Sidebar />
+        <Page title="No-code HTML Builder">
+          <Card>
+            <Editor blocks={blocks} setBlocks={setBlocks} />
+          </Card>
+        </Page>
+      </div>
+    </DndProvider>
   );
 }
