@@ -1,5 +1,13 @@
 import { useState, useCallback, memo } from "react";
-import { Page, Layout, Card, Text, BlockStack } from "@shopify/polaris";
+import {
+  Page,
+  Layout,
+  Card,
+  Text,
+  BlockStack,
+  Button,
+  TextField,
+} from "@shopify/polaris";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
@@ -8,7 +16,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
  Helper types & constants
 -------------------------------------------------------------------*/
 
-type NodeItemType = "row" | "column" | "text";
+type NodeItemType = "row" | "column" | "text" | "image";
 
 // BuilderNode is the type of the nodes in the layout tree.
 interface BuilderNode {
@@ -16,6 +24,7 @@ interface BuilderNode {
   type: NodeItemType;
   children: BuilderNode[];
   content?: string; // for text component
+  imageUrl?: string; // for image component
 }
 
 // Drag item shape
@@ -34,6 +43,7 @@ const NODE_ITEMS: { id: NodeItemType; label: string }[] = [
   { id: "row", label: "Row" },
   { id: "column", label: "Column" },
   { id: "text", label: "Text" },
+  { id: "image", label: "Image" },
 ];
 
 /* ------------------------------------------------------------------
@@ -195,10 +205,11 @@ const DropZone = ({ path, onDrop, isLast }: DropZoneProps) => {
 interface NodeProps {
   node: BuilderNode;
   path: string;
-  onDrop: (item: DragItem, dropZonePath: string) => void;
+  onDrop?: (item: DragItem, dropZonePath: string) => void;
+  onClick?: () => void;
 }
 
-const RowNode = ({ node, path, onDrop }: NodeProps) => {
+const RowNode = ({ node, path, onDrop, onClick }: NodeProps) => {
   const [, drag, preview] = useDrag<DragItem>(
     () => ({
       type: ItemTypes.NODE,
@@ -208,7 +219,11 @@ const RowNode = ({ node, path, onDrop }: NodeProps) => {
   );
 
   return (
-    <div ref={preview} className="border rounded p-2 mb-2 bg-gray-100">
+    <div
+      ref={preview}
+      className="border rounded p-2 mb-2 bg-gray-100"
+      onClick={onClick}
+    >
       <div ref={drag} className="font-semibold mb-1 cursor-move">
         Row
       </div>
@@ -219,7 +234,7 @@ const RowNode = ({ node, path, onDrop }: NodeProps) => {
             <DropZone
               key={`before-${child.id}`}
               path={childPath}
-              onDrop={onDrop}
+              onDrop={onDrop!}
             />
             <NodeRenderer node={child} path={childPath} onDrop={onDrop} />
             {idx === node.children.length - 1 && (
@@ -227,7 +242,7 @@ const RowNode = ({ node, path, onDrop }: NodeProps) => {
                 key={`after-${child.id}`}
                 path={`${childPath}-end`}
                 isLast
-                onDrop={onDrop}
+                onDrop={onDrop!}
               />
             )}
           </div>
@@ -238,21 +253,25 @@ const RowNode = ({ node, path, onDrop }: NodeProps) => {
           key={`empty-${node.id}`}
           path={`${path}-0`}
           isLast
-          onDrop={onDrop}
+          onDrop={onDrop!}
         />
       )}
     </div>
   );
 };
 
-const ColumnNode = ({ node, path, onDrop }: NodeProps) => {
+const ColumnNode = ({ node, path, onDrop, onClick }: NodeProps) => {
   const [, drag, preview] = useDrag<DragItem>(() => ({
     type: ItemTypes.NODE,
     item: { id: node.id, type: node.type, path },
   }));
 
   return (
-    <div ref={preview} className="border dashed rounded p-2 mb-2 bg-gray-50">
+    <div
+      ref={preview}
+      className="border dashed rounded p-2 mb-2 bg-gray-50"
+      onClick={onClick}
+    >
       <div ref={drag} className="italic mb-1 cursor-move text-sm text-gray-700">
         Column
       </div>
@@ -263,7 +282,7 @@ const ColumnNode = ({ node, path, onDrop }: NodeProps) => {
             <DropZone
               key={`before-${child.id}`}
               path={childPath}
-              onDrop={onDrop}
+              onDrop={onDrop!}
             />
             <NodeRenderer node={child} path={childPath} onDrop={onDrop} />
             {idx === node.children.length - 1 && (
@@ -271,7 +290,7 @@ const ColumnNode = ({ node, path, onDrop }: NodeProps) => {
                 key={`after-${child.id}`}
                 path={`${childPath}-end`}
                 isLast
-                onDrop={onDrop}
+                onDrop={onDrop!}
               />
             )}
           </div>
@@ -282,20 +301,24 @@ const ColumnNode = ({ node, path, onDrop }: NodeProps) => {
           key={`empty-${node.id}`}
           path={`${path}-0`}
           isLast
-          onDrop={onDrop}
+          onDrop={onDrop!}
         />
       )}
     </div>
   );
 };
 
-const TextNode = ({ node, path }: NodeProps) => {
+const TextNode = ({ node, path, onClick }: NodeProps) => {
   const [, drag, preview] = useDrag<DragItem>(() => ({
     type: ItemTypes.NODE,
     item: { id: node.id, type: node.type, path },
   }));
   return (
-    <div ref={preview} className="p-2 bg-white rounded shadow-sm mb-2">
+    <div
+      ref={preview}
+      className="p-2 bg-white rounded shadow-sm mb-2"
+      onClick={onClick}
+    >
       <div ref={drag} className="cursor-move text-gray-500 text-xs">
         Text
       </div>
@@ -304,16 +327,168 @@ const TextNode = ({ node, path }: NodeProps) => {
   );
 };
 
+const ImageNode = ({ node, path, onClick }: NodeProps) => {
+  const [, drag, preview] = useDrag<DragItem>(() => ({
+    type: ItemTypes.NODE,
+    item: { id: node.id, type: node.type, path },
+  }));
+
+  return (
+    <div
+      ref={preview}
+      className="p-2 bg-white rounded shadow-sm mb-2"
+      onClick={onClick}
+    >
+      <div ref={drag} className="cursor-move text-gray-500 text-xs">
+        Image
+      </div>
+      <div className="flex justify-center items-center mt-2 bg-gray-100 p-2 rounded">
+        {node.imageUrl ? (
+          <img
+            src={node.imageUrl}
+            alt="User selected content"
+            className="max-w-full max-h-48 object-contain"
+          />
+        ) : (
+          <div className="w-32 h-32 border-2 border-gray-300 flex items-center justify-center">
+            <svg
+              width="64"
+              height="64"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // NodeRenderer is a component that renders a BuilderNode based on its type.
-const NodeRenderer = ({ node, path, onDrop }: NodeProps) => {
+const NodeRenderer = ({ node, path, onDrop, onClick }: NodeProps) => {
+  const handleClick = () => {
+    if (onClick) onClick();
+  };
+
   switch (node.type) {
     case "row":
-      return <RowNode node={node} path={path} onDrop={onDrop} />;
+      return (
+        <RowNode
+          node={node}
+          path={path}
+          onDrop={onDrop}
+          onClick={handleClick}
+        />
+      );
     case "column":
-      return <ColumnNode node={node} path={path} onDrop={onDrop} />;
+      return (
+        <ColumnNode
+          node={node}
+          path={path}
+          onDrop={onDrop}
+          onClick={handleClick}
+        />
+      );
+    case "image":
+      return <ImageNode node={node} path={path} onClick={handleClick} />;
     case "text":
     default:
-      return <TextNode node={node} path={path} onDrop={onDrop} />;
+      return <TextNode node={node} path={path} onClick={handleClick} />;
+  }
+};
+
+/* ------------------------------------------------------------------
+ Node Settings Panel Components
+-------------------------------------------------------------------*/
+
+interface NodeSettingsProps {
+  selectedNode: BuilderNode | null;
+  onUpdateNode: (updatedNode: Partial<BuilderNode>) => void;
+}
+
+const ImageNodeSettings = ({
+  selectedNode,
+  onUpdateNode,
+}: NodeSettingsProps) => {
+  const [imageUrl, setImageUrl] = useState(selectedNode?.imageUrl || "");
+
+  const handleImageChange = (value: string) => {
+    setImageUrl(value);
+    onUpdateNode({ imageUrl: value });
+  };
+
+  return (
+    <BlockStack gap="400">
+      <Text as="h2" variant="headingMd">
+        Image Settings
+      </Text>
+      <TextField
+        label="Image URL"
+        value={imageUrl}
+        onChange={handleImageChange}
+        autoComplete="off"
+        placeholder="https://example.com/image.jpg"
+      />
+      <Button
+        onClick={() => {
+          if (imageUrl) return;
+          // Default placeholder image URL
+          const placeholderUrl = "https://placekitten.com/300/200";
+          setImageUrl(placeholderUrl);
+          onUpdateNode({ imageUrl: placeholderUrl });
+        }}
+      >
+        {imageUrl ? "Update Image" : "Use Default Image"}
+      </Button>
+      {imageUrl && (
+        <Button
+          variant="plain"
+          tone="critical"
+          onClick={() => {
+            setImageUrl("");
+            onUpdateNode({ imageUrl: "" });
+          }}
+        >
+          Remove Image
+        </Button>
+      )}
+    </BlockStack>
+  );
+};
+
+const NodeSettings = ({ selectedNode, onUpdateNode }: NodeSettingsProps) => {
+  if (!selectedNode) {
+    return (
+      <Text as="p" alignment="center" tone="subdued">
+        Select a node to configure
+      </Text>
+    );
+  }
+
+  switch (selectedNode.type) {
+    case "image":
+      return (
+        <ImageNodeSettings
+          selectedNode={selectedNode}
+          onUpdateNode={onUpdateNode}
+        />
+      );
+    case "text":
+      return <Text as="p">Text settings coming soon</Text>;
+    case "row":
+      return <Text as="p">Row settings coming soon</Text>;
+    case "column":
+      return <Text as="p">Column settings coming soon</Text>;
+    default:
+      return <Text as="p">No settings available</Text>;
   }
 };
 
@@ -323,6 +498,11 @@ const NodeRenderer = ({ node, path, onDrop }: NodeProps) => {
 
 export default function HtmlBuilderRoute() {
   const [layout, setLayout] = useState<BuilderNode[]>([]);
+  const [selectedNodePath, setSelectedNodePath] = useState<string | null>(null);
+
+  const selectedNode = selectedNodePath
+    ? getNodeByPath(layout, pathToIndices(selectedNodePath))
+    : null;
 
   const handleDrop = useCallback(
     (dragItem: DragItem, dropZonePathStr: string) => {
@@ -342,7 +522,8 @@ export default function HtmlBuilderRoute() {
           itemNode = {
             id: dragItem.id,
             type: dragItem.type,
-            children: dragItem.type === "text" ? [] : [],
+            children:
+              dragItem.type === "text" || dragItem.type === "image" ? [] : [],
           };
         } else if (dragItem.path) {
           console.log("from existing", dragItem);
@@ -364,6 +545,26 @@ export default function HtmlBuilderRoute() {
     [] // No dependencies needed since we're using the function form of setState
   );
 
+  const handleNodeSelect = useCallback((path: string) => {
+    setSelectedNodePath(path);
+  }, []);
+
+  const handleNodeUpdate = useCallback(
+    (updates: Partial<BuilderNode>) => {
+      if (!selectedNodePath) return;
+
+      setLayout((currentLayout) => {
+        const newLayout = structuredClone(currentLayout);
+        const node = getNodeByPath(newLayout, pathToIndices(selectedNodePath));
+        if (node) {
+          Object.assign(node, updates);
+        }
+        return newLayout;
+      });
+    },
+    [selectedNodePath]
+  );
+
   return (
     <Page title="HTML Builder">
       <DndProvider backend={HTML5Backend}>
@@ -377,7 +578,7 @@ export default function HtmlBuilderRoute() {
             </Card>
           </Layout.Section>
           {/* Center section that shows the layout tree */}
-          <Layout.Section>
+          <Layout.Section variant="oneThird">
             <Card padding="400">
               {/* initial dropzone */}
               {layout.length === 0 && (
@@ -398,7 +599,12 @@ export default function HtmlBuilderRoute() {
                       path={path}
                       onDrop={handleDrop}
                     />
-                    <NodeRenderer node={node} path={path} onDrop={handleDrop} />
+                    <NodeRenderer
+                      node={node}
+                      path={path}
+                      onDrop={handleDrop}
+                      onClick={() => handleNodeSelect(path)}
+                    />
                     {/* last dropzone */}
                     {idx === layout.length - 1 && (
                       <DropZone
@@ -411,6 +617,15 @@ export default function HtmlBuilderRoute() {
                   </div>
                 );
               })}
+            </Card>
+          </Layout.Section>
+          {/* Right section for node settings */}
+          <Layout.Section variant="oneThird">
+            <Card padding="400">
+              <NodeSettings
+                selectedNode={selectedNode}
+                onUpdateNode={handleNodeUpdate}
+              />
             </Card>
           </Layout.Section>
         </Layout>
