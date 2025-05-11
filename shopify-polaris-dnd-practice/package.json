@@ -16,11 +16,16 @@
     "@remix-run/react": "^2.16.5",
     "@remix-run/serve": "^2.16.5",
     "@shopify/polaris": "^13.9.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "isbot": "^4.1.0",
+    "lucide-react": "^0.509.0",
     "react": "^18.2.0",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.2.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@remix-run/dev": "^2.16.5",

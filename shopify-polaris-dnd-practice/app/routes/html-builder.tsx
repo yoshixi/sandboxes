@@ -2,12 +2,13 @@ import { useState, useCallback, memo } from "react";
 import {
   Page,
   Layout,
-  Card,
   Text,
   BlockStack,
   Button,
   TextField,
+  Grid,
 } from "@shopify/polaris";
+import { Card } from "@/components/ui/card";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
@@ -566,20 +567,21 @@ export default function HtmlBuilderRoute() {
   );
 
   return (
-    <Page title="HTML Builder">
+    <Page title="HTML Builder" fullWidth>
       <DndProvider backend={HTML5Backend}>
-        <Layout>
-          {/* Left Sidebar that shows the available node items`*/}
-          <Layout.Section variant="oneThird">
-            <Card padding="400">
+        <Grid columns={{ lg: 8, xl: 8 }}>
+          {/* Left Sidebar that shows the available node items - 2 columns */}
+          <Grid.Cell columnSpan={{ xs: 6, sm: 2, md: 2, lg: 2, xl: 2 }}>
+            <Card className="p-6">
               {NODE_ITEMS.map((item) => (
                 <NodeItem key={item.id} item={item} />
               ))}
             </Card>
-          </Layout.Section>
-          {/* Center section that shows the layout tree */}
-          <Layout.Section variant="oneThird">
-            <Card padding="400">
+          </Grid.Cell>
+
+          {/* Center section that shows the layout tree - 4 columns */}
+          <Grid.Cell columnSpan={{ xs: 6, sm: 4, md: 6, lg: 4, xl: 4 }}>
+            <Card className="p-6">
               {/* initial dropzone */}
               {layout.length === 0 && (
                 <DropZone
@@ -618,17 +620,18 @@ export default function HtmlBuilderRoute() {
                 );
               })}
             </Card>
-          </Layout.Section>
-          {/* Right section for node settings */}
-          <Layout.Section variant="oneThird">
-            <Card padding="400">
+          </Grid.Cell>
+
+          {/* Right section for node settings - 2 columns */}
+          <Grid.Cell columnSpan={{ xs: 6, sm: 2, md: 2, lg: 2, xl: 2 }}>
+            <Card className="p-6">
               <NodeSettings
                 selectedNode={selectedNode}
                 onUpdateNode={handleNodeUpdate}
               />
             </Card>
-          </Layout.Section>
-        </Layout>
+          </Grid.Cell>
+        </Grid>
       </DndProvider>
     </Page>
   );
