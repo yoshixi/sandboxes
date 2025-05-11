@@ -1,12 +1,6 @@
 import { useState, useCallback, memo } from "react";
 import { Page, Layout, Card, Text, BlockStack } from "@shopify/polaris";
-import {
-  DndProvider,
-  useDrag,
-  useDrop,
-  DragSourceMonitor,
-  DropTargetMonitor,
-} from "react-dnd";
+import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 
@@ -14,11 +8,12 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
  Helper types & constants
 -------------------------------------------------------------------*/
 
-type SidebarItemType = "row" | "column" | "text";
+type NodeItemType = "row" | "column" | "text";
 
+// BuilderNode is the type of the nodes in the layout tree.
 interface BuilderNode {
   id: string;
-  type: SidebarItemType;
+  type: NodeItemType;
   children: BuilderNode[];
   content?: string; // for text component
 }
@@ -26,7 +21,7 @@ interface BuilderNode {
 // Drag item shape
 interface DragItem {
   id: string;
-  type: SidebarItemType;
+  type: NodeItemType;
   path?: string; // If dragging an existing node, path represents its position in the layout tree
   fromSidebar?: boolean; // Sidebar items set this true
 }
@@ -35,7 +30,7 @@ const ItemTypes = {
   NODE: "NODE",
 };
 
-const SIDEBAR_ITEMS: { id: SidebarItemType; label: string }[] = [
+const NODE_ITEMS: { id: NodeItemType; label: string }[] = [
   { id: "row", label: "Row" },
   { id: "column", label: "Column" },
   { id: "text", label: "Text" },
@@ -131,16 +126,17 @@ const insertAtPath = (
   return newTree;
 };
 
+// generateId is a helper function to generate a unique id for a node
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 /* ------------------------------------------------------------------
- SidebarItem
+ NodeItem
 -------------------------------------------------------------------*/
 
-const SidebarItem = memo(function SidebarItem({
+const NodeItem = memo(function NodeItem({
   item,
 }: {
-  item: { id: SidebarItemType; label: string };
+  item: { id: NodeItemType; label: string };
 }) {
   const [, drag] = useDrag<DragItem>(() => ({
     type: ItemTypes.NODE,
@@ -308,6 +304,7 @@ const TextNode = ({ node, path }: NodeProps) => {
   );
 };
 
+// NodeRenderer is a component that renders a BuilderNode based on its type.
 const NodeRenderer = ({ node, path, onDrop }: NodeProps) => {
   switch (node.type) {
     case "row":
@@ -371,13 +368,15 @@ export default function HtmlBuilderRoute() {
     <Page title="HTML Builder">
       <DndProvider backend={HTML5Backend}>
         <Layout>
+          {/* Left Sidebar that shows the available node items`*/}
           <Layout.Section variant="oneThird">
             <Card padding="400">
-              {SIDEBAR_ITEMS.map((item) => (
-                <SidebarItem key={item.id} item={item} />
+              {NODE_ITEMS.map((item) => (
+                <NodeItem key={item.id} item={item} />
               ))}
             </Card>
           </Layout.Section>
+          {/* Center section that shows the layout tree */}
           <Layout.Section>
             <Card padding="400">
               {/* initial dropzone */}
