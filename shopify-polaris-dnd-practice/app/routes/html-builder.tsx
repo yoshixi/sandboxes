@@ -8,10 +8,26 @@ import {
   TextField,
   Grid,
 } from "@shopify/polaris";
-import { Card } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+} from "@/components/ui/card";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { cn } from "~/lib/utils";
+import {
+  LayoutGrid,
+  Columns,
+  Type,
+  Image as ImageIcon,
+  GripVertical,
+  Pencil,
+} from "lucide-react";
 
 /* ------------------------------------------------------------------
  Helper types & constants
@@ -40,12 +56,13 @@ const ItemTypes = {
   NODE: "NODE",
 };
 
-const NODE_ITEMS: { id: NodeItemType; label: string }[] = [
-  { id: "row", label: "Row" },
-  { id: "column", label: "Column" },
-  { id: "text", label: "Text" },
-  { id: "image", label: "Image" },
-];
+const NODE_ITEMS: { id: NodeItemType; label: string; icon: React.ReactNode }[] =
+  [
+    { id: "row", label: "Row", icon: <LayoutGrid className="h-4 w-4" /> },
+    { id: "column", label: "Column", icon: <Columns className="h-4 w-4" /> },
+    { id: "text", label: "Text", icon: <Type className="h-4 w-4" /> },
+    { id: "image", label: "Image", icon: <ImageIcon className="h-4 w-4" /> },
+  ];
 
 /* ------------------------------------------------------------------
  Utility helpers to manipulate the layout tree by path
@@ -147,7 +164,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 const NodeItem = memo(function NodeItem({
   item,
 }: {
-  item: { id: NodeItemType; label: string };
+  item: { id: NodeItemType; label: string; icon: React.ReactNode };
 }) {
   const [, drag] = useDrag<DragItem>(() => ({
     type: ItemTypes.NODE,
@@ -156,9 +173,13 @@ const NodeItem = memo(function NodeItem({
   return (
     <div
       ref={drag}
-      className="cursor-pointer rounded border p-2 mb-2 bg-white hover:bg-gray-50 shadow-sm"
+      className={cn(
+        "cursor-pointer rounded-md border p-3 mb-3 bg-card hover:bg-accent/50 shadow-sm",
+        "flex items-center gap-2 transition-colors duration-200"
+      )}
     >
-      {item.label}
+      <div className="text-muted-foreground">{item.icon}</div>
+      <span className="font-medium">{item.label}</span>
     </div>
   );
 });
@@ -192,9 +213,14 @@ const DropZone = ({ path, onDrop, isLast }: DropZoneProps) => {
     <div
       ref={drop}
       data-path={path}
-      className={`h-4 ${isLast ? "mb-2" : ""} ${
-        isOver && canDrop ? "bg-blue-400" : "bg-transparent"
-      }`}
+      className={cn(
+        "h-2 transition-colors duration-200 rounded-sm",
+        isLast ? "mb-2" : "",
+        isOver && canDrop
+          ? "bg-primary/70"
+          : "bg-transparent hover:bg-primary/20"
+      )}
+      style={{ minHeight: "8px" }} // Ensure minimum height for better drag target
     />
   );
 };
@@ -222,16 +248,23 @@ const RowNode = ({ node, path, onDrop, onClick }: NodeProps) => {
   return (
     <div
       ref={preview}
-      className="border rounded p-2 mb-2 bg-gray-100"
+      className="border rounded-md p-3 mb-3 bg-secondary/50 shadow-sm"
       onClick={onClick}
     >
-      <div ref={drag} className="font-semibold mb-1 cursor-move">
-        Row
+      <div
+        ref={drag}
+        className="font-medium mb-2 cursor-move flex items-center gap-2 text-sm"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+        <span className="flex items-center gap-1.5">
+          <LayoutGrid className="h-3.5 w-3.5" />
+          Row
+        </span>
       </div>
       {node.children.map((child, idx) => {
         const childPath = `${path}-${idx}`;
         return (
-          <div key={child.id} className="pl-2">
+          <div key={child.id} className="pl-3">
             <DropZone
               key={`before-${child.id}`}
               path={childPath}
@@ -250,12 +283,15 @@ const RowNode = ({ node, path, onDrop, onClick }: NodeProps) => {
         );
       })}
       {node.children.length === 0 && (
-        <DropZone
-          key={`empty-${node.id}`}
-          path={`${path}-0`}
-          isLast
-          onDrop={onDrop!}
-        />
+        <div className="py-3 px-2 border border-dashed rounded-md border-muted-foreground/30 bg-muted/30 flex flex-col items-center justify-center">
+          <p className="text-xs text-muted-foreground mb-2">Drop items here</p>
+          <DropZone
+            key={`empty-${node.id}`}
+            path={`${path}-0`}
+            isLast
+            onDrop={onDrop!}
+          />
+        </div>
       )}
     </div>
   );
@@ -270,11 +306,18 @@ const ColumnNode = ({ node, path, onDrop, onClick }: NodeProps) => {
   return (
     <div
       ref={preview}
-      className="border dashed rounded p-2 mb-2 bg-gray-50"
+      className="border border-dashed rounded-md p-3 mb-3 bg-background shadow-sm"
       onClick={onClick}
     >
-      <div ref={drag} className="italic mb-1 cursor-move text-sm text-gray-700">
-        Column
+      <div
+        ref={drag}
+        className="mb-2 cursor-move flex items-center gap-2 text-sm"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Columns className="h-3.5 w-3.5" />
+          Column
+        </span>
       </div>
       {node.children.map((child, idx) => {
         const childPath = `${path}-${idx}`;
@@ -298,12 +341,15 @@ const ColumnNode = ({ node, path, onDrop, onClick }: NodeProps) => {
         );
       })}
       {node.children.length === 0 && (
-        <DropZone
-          key={`empty-${node.id}`}
-          path={`${path}-0`}
-          isLast
-          onDrop={onDrop!}
-        />
+        <div className="py-3 px-2 border border-dashed rounded-md border-muted-foreground/30 bg-muted/10 flex flex-col items-center justify-center">
+          <p className="text-xs text-muted-foreground mb-2">Drop items here</p>
+          <DropZone
+            key={`empty-${node.id}`}
+            path={`${path}-0`}
+            isLast
+            onDrop={onDrop!}
+          />
+        </div>
       )}
     </div>
   );
@@ -317,13 +363,23 @@ const TextNode = ({ node, path, onClick }: NodeProps) => {
   return (
     <div
       ref={preview}
-      className="p-2 bg-white rounded shadow-sm mb-2"
+      className="p-3 bg-card rounded-md shadow-sm mb-3 border"
       onClick={onClick}
     >
-      <div ref={drag} className="cursor-move text-gray-500 text-xs">
-        Text
+      <div
+        ref={drag}
+        className="cursor-move text-muted-foreground text-xs flex items-center gap-1.5 mb-2"
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+        <span className="flex items-center gap-1">
+          <Type className="h-3 w-3" />
+          Text
+        </span>
+        <div className="ml-auto">
+          <Pencil className="h-3 w-3" />
+        </div>
       </div>
-      <p className="mt-1">Sample text content</p>
+      <p className="mt-1 text-sm">{node.content || "Sample text content"}</p>
     </div>
   );
 };
@@ -337,35 +393,32 @@ const ImageNode = ({ node, path, onClick }: NodeProps) => {
   return (
     <div
       ref={preview}
-      className="p-2 bg-white rounded shadow-sm mb-2"
+      className="p-3 bg-card rounded-md shadow-sm mb-3 border"
       onClick={onClick}
     >
-      <div ref={drag} className="cursor-move text-gray-500 text-xs">
-        Image
+      <div
+        ref={drag}
+        className="cursor-move text-muted-foreground text-xs flex items-center gap-1.5 mb-2"
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+        <span className="flex items-center gap-1">
+          <ImageIcon className="h-3 w-3" />
+          Image
+        </span>
+        <div className="ml-auto">
+          <Pencil className="h-3 w-3" />
+        </div>
       </div>
-      <div className="flex justify-center items-center mt-2 bg-gray-100 p-2 rounded">
+      <div className="flex justify-center items-center mt-2 bg-muted/30 p-2 rounded-md">
         {node.imageUrl ? (
           <img
             src={node.imageUrl}
             alt="User selected content"
-            className="max-w-full max-h-48 object-contain"
+            className="max-w-full max-h-48 object-contain rounded-sm"
           />
         ) : (
-          <div className="w-32 h-32 border-2 border-gray-300 flex items-center justify-center">
-            <svg
-              width="64"
-              height="64"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
+          <div className="w-32 h-32 border-2 border-border flex items-center justify-center rounded-md">
+            <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
           </div>
         )}
       </div>
@@ -468,9 +521,14 @@ const ImageNodeSettings = ({
 const NodeSettings = ({ selectedNode, onUpdateNode }: NodeSettingsProps) => {
   if (!selectedNode) {
     return (
-      <Text as="p" alignment="center" tone="subdued">
-        Select a node to configure
-      </Text>
+      <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-muted-foreground">
+        <div className="mb-3">
+          <Pencil className="h-8 w-8 opacity-30" />
+        </div>
+        <Text as="p" alignment="center" tone="subdued">
+          Select a node to configure
+        </Text>
+      </div>
     );
   }
 
@@ -510,6 +568,7 @@ export default function HtmlBuilderRoute() {
       const dropPathIndices = dropZonePathStr.includes("end")
         ? pathToIndices(dropZonePathStr.replace("-end", ""))
         : pathToIndices(dropZonePathStr);
+      console.log("handleDrop", dragItem, dropPathIndices);
 
       // Use functional setState to guarantee we're using the latest state
       setLayout((currentLayout) => {
@@ -572,63 +631,90 @@ export default function HtmlBuilderRoute() {
         <Grid columns={{ lg: 8, xl: 8 }}>
           {/* Left Sidebar that shows the available node items - 2 columns */}
           <Grid.Cell columnSpan={{ xs: 6, sm: 2, md: 2, lg: 2, xl: 2 }}>
-            <Card className="p-6">
-              {NODE_ITEMS.map((item) => (
-                <NodeItem key={item.id} item={item} />
-              ))}
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle>Components</CardTitle>
+                <CardDescription>
+                  Drag and drop to build your layout
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {NODE_ITEMS.map((item) => (
+                  <NodeItem key={item.id} item={item} />
+                ))}
+              </CardContent>
             </Card>
           </Grid.Cell>
 
           {/* Center section that shows the layout tree - 4 columns */}
           <Grid.Cell columnSpan={{ xs: 6, sm: 4, md: 6, lg: 4, xl: 4 }}>
-            <Card className="p-6">
-              {/* initial dropzone */}
-              {layout.length === 0 && (
-                <DropZone
-                  key="initial-dropzone"
-                  path="0"
-                  onDrop={handleDrop}
-                  isLast
-                />
-              )}
-              {layout.map((node, idx) => {
-                const path = `${idx}`;
-                return (
-                  <div key={node.id}>
-                    <DropZone
-                      key={`dropzone-before-${node.id}`} // dropzone is rendered every time the layout changes and using {prefixed} keys avoid to conflict with the previous dropzones
-                      data-path={path}
-                      path={path}
-                      onDrop={handleDrop}
-                    />
-                    <NodeRenderer
-                      node={node}
-                      path={path}
-                      onDrop={handleDrop}
-                      onClick={() => handleNodeSelect(path)}
-                    />
-                    {/* last dropzone */}
-                    {idx === layout.length - 1 && (
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle>Canvas</CardTitle>
+                <CardDescription>Your layout will appear here</CardDescription>
+              </CardHeader>
+              <CardContent className="min-h-[400px]">
+                {/* initial dropzone */}
+                {layout.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-[300px] border-2 border-dashed rounded-lg border-muted-foreground/20 bg-muted/5">
+                    <p className="text-muted-foreground mb-4">
+                      Drag components here to start building
+                    </p>
+                    <div className="w-full h-8 flex items-center justify-center">
                       <DropZone
-                        key={`dropzone-after-${node.id}`}
-                        path={`${idx + 1}-end`}
+                        key="initial-dropzone"
+                        path="0"
+                        onDrop={handleDrop}
                         isLast
+                      />
+                    </div>
+                  </div>
+                )}
+                {layout.map((node, idx) => {
+                  const path = `${idx}`;
+                  return (
+                    <div key={node.id}>
+                      <DropZone
+                        key={`dropzone-before-${node.id}`}
+                        data-path={path}
+                        path={path}
                         onDrop={handleDrop}
                       />
-                    )}
-                  </div>
-                );
-              })}
+                      <NodeRenderer
+                        node={node}
+                        path={path}
+                        onDrop={handleDrop}
+                        onClick={() => handleNodeSelect(path)}
+                      />
+                      {/* last dropzone */}
+                      {idx === layout.length - 1 && (
+                        <DropZone
+                          key={`dropzone-after-${node.id}`}
+                          path={`${idx + 1}`}
+                          isLast
+                          onDrop={handleDrop}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </CardContent>
             </Card>
           </Grid.Cell>
 
           {/* Right section for node settings - 2 columns */}
           <Grid.Cell columnSpan={{ xs: 6, sm: 2, md: 2, lg: 2, xl: 2 }}>
-            <Card className="p-6">
-              <NodeSettings
-                selectedNode={selectedNode}
-                onUpdateNode={handleNodeUpdate}
-              />
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle>Settings</CardTitle>
+                <CardDescription>Configure selected component</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <NodeSettings
+                  selectedNode={selectedNode}
+                  onUpdateNode={handleNodeUpdate}
+                />
+              </CardContent>
             </Card>
           </Grid.Cell>
         </Grid>
