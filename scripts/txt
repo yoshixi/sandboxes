@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Get the current directory name (basename)
+current_dir=$(basename "$(pwd)")
+
+# Check if argument is provided
+if [ $# -eq 0 ]; then
+    echo "Usage: txt <text>"
+    echo "Example: txt \"hello\" -> \"dir01 - hello\""
+    exit 1
+fi
+
+# Output the formatted text with directory prefix
+echo "$current_dir - $1"

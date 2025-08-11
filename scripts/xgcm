@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Get the directory of this script to find the txt command
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if argument is provided
+if [ $# -eq 0 ]; then
+    echo "Usage: xgcm <commit_message>"
+    echo "Example: xgcm \"init\" -> commits with message \"dir01 - init\""
+    exit 1
+fi
+
+# Generate the formatted commit message using txt command
+commit_message=$("$SCRIPT_DIR/txt" "$1")
+
+# Create git commit with the formatted message
+git commit -m "$commit_message"
