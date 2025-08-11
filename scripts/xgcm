@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Get the directory of this script to find the txt command
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the current directory name (basename)
+current_dir=$(basename "$(pwd)")
 
 # Check if argument is provided
 if [ $# -eq 0 ]; then
@@ -10,8 +10,8 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-# Generate the formatted commit message using txt command
-commit_message=$("$SCRIPT_DIR/txt" "$1")
+# Generate the formatted commit message with directory prefix
+commit_message="$current_dir - $1"
 
 # Create git commit with the formatted message
 git commit -m "$commit_message"
