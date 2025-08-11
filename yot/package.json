@@ -9,6 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^2.0.3",
+    "@google/genai": "^1.13.0",
+    "@slack/bolt": "^4.4.0",
+    "ai": "^5.0.6",
     "hono": "^4.8.12",
     "next": "15.4.6",
     "react": "19.1.0",
