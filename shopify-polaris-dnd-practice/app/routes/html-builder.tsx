@@ -1,7 +1,6 @@
 import { useState, useCallback, memo } from "react";
 import {
   Page,
-  Layout,
   Text,
   BlockStack,
   Button,
@@ -14,11 +13,10 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardFooter,
 } from "@/components/ui/card";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import type { MetaFunction } from "@remix-run/node";
 import { cn } from "~/lib/utils";
 import {
   LayoutGrid,
@@ -72,21 +70,6 @@ const NODE_ITEMS: { id: NodeItemType; label: string; icon: React.ReactNode }[] =
 const pathToIndices = (path: string): number[] =>
   path.split("-").map((n) => parseInt(n, 10));
 
-const traverse = (
-  tree: BuilderNode[],
-  callback: (
-    node: BuilderNode,
-    idx: number,
-    parent: BuilderNode[] | null
-  ) => void,
-  path: number[] = []
-) => {
-  const parentArr =
-    path.length === 0 ? tree : getNodeByPath(tree, path.slice(0, -1))?.children;
-  path.forEach(() => {}); // dummy to use path param (linter)
-  if (!parentArr) return;
-  parentArr.forEach((node, idx) => callback(node, idx, parentArr));
-};
 
 const getNodeByPath = (
   tree: BuilderNode[],
@@ -166,20 +149,35 @@ const NodeItem = memo(function NodeItem({
 }: {
   item: { id: NodeItemType; label: string; icon: React.ReactNode };
 }) {
-  const [, drag] = useDrag<DragItem>(() => ({
+  const [{ isDragging }, drag] = useDrag<DragItem, void, { isDragging: boolean }>(() => ({
     type: ItemTypes.NODE,
     item: () => ({ id: generateId(), type: item.id, fromSidebar: true }),
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
   }));
+  
   return (
     <div
       ref={drag}
       className={cn(
-        "cursor-pointer rounded-md border p-3 mb-3 bg-card hover:bg-accent/50 shadow-sm",
-        "flex items-center gap-2 transition-colors duration-200"
+        "cursor-pointer rounded-md border p-3 mb-3 bg-card shadow-sm",
+        "flex items-center gap-2 transition-all duration-200 select-none",
+        isDragging 
+          ? "opacity-50 scale-95 rotate-2 shadow-lg border-primary/50" 
+          : "hover:bg-accent/50 hover:scale-[1.02] hover:shadow-md active:scale-95"
       )}
     >
-      <div className="text-muted-foreground">{item.icon}</div>
-      <span className="font-medium">{item.label}</span>
+      <div className={cn("text-muted-foreground transition-colors duration-200", 
+        isDragging && "text-primary"
+      )}>
+        {item.icon}
+      </div>
+      <span className={cn("font-medium transition-colors duration-200",
+        isDragging && "text-primary"
+      )}>
+        {item.label}
+      </span>
     </div>
   );
 });
@@ -209,18 +207,24 @@ const DropZone = ({ path, onDrop, isLast }: DropZoneProps) => {
     }),
     [path, onDrop]
   );
+  
   return (
     <div
       ref={drop}
       data-path={path}
       className={cn(
-        "h-2 transition-colors duration-200 rounded-sm",
+        "transition-all duration-300 rounded-sm relative overflow-hidden",
         isLast ? "mb-2" : "",
         isOver && canDrop
-          ? "bg-primary/70"
-          : "bg-transparent hover:bg-primary/20"
+          ? "h-8 bg-primary/20 border-2 border-dashed border-primary shadow-lg" +
+            " before:content-['Drop_here'] before:absolute before:inset-0 before:flex" +
+            " before:items-center before:justify-center before:text-xs before:font-medium" +
+            " before:text-primary before:animate-pulse"
+          : canDrop
+          ? "h-2 bg-primary/10 hover:bg-primary/20 hover:h-4"
+          : "h-2 bg-transparent"
       )}
-      style={{ minHeight: "8px" }} // Ensure minimum height for better drag target
+      style={{ minHeight: "8px" }}
     />
   );
 };
@@ -237,10 +241,13 @@ interface NodeProps {
 }
 
 const RowNode = ({ node, path, onDrop, onClick }: NodeProps) => {
-  const [, drag, preview] = useDrag<DragItem>(
+  const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>(
     () => ({
       type: ItemTypes.NODE,
       item: { id: node.id, type: node.type, path },
+      collect: (monitor) => ({
+        isDragging: monitor.isDragging(),
+      }),
     }),
     [node, path]
   );
@@ -248,14 +255,24 @@ const RowNode = ({ node, path, onDrop, onClick }: NodeProps) => {
   return (
     <div
       ref={preview}
-      className="border rounded-md p-3 mb-3 bg-secondary/50 shadow-sm"
+      className={cn(
+        "border rounded-md p-3 mb-3 bg-secondary/50 shadow-sm transition-all duration-200 select-none",
+        isDragging 
+          ? "opacity-50 scale-95 rotate-1 shadow-xl border-primary/50 bg-primary/10" 
+          : "hover:shadow-md hover:bg-secondary/60"
+      )}
       onClick={onClick}
     >
       <div
         ref={drag}
-        className="font-medium mb-2 cursor-move flex items-center gap-2 text-sm"
+        className={cn(
+          "font-medium mb-2 cursor-move flex items-center gap-2 text-sm transition-colors duration-200",
+          isDragging && "text-primary"
+        )}
       >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
+        <GripVertical className={cn("h-4 w-4 text-muted-foreground transition-colors duration-200",
+          isDragging && "text-primary"
+        )} />
         <span className="flex items-center gap-1.5">
           <LayoutGrid className="h-3.5 w-3.5" />
           Row
@@ -283,7 +300,7 @@ const RowNode = ({ node, path, onDrop, onClick }: NodeProps) => {
         );
       })}
       {node.children.length === 0 && (
-        <div className="py-3 px-2 border border-dashed rounded-md border-muted-foreground/30 bg-muted/30 flex flex-col items-center justify-center">
+        <div className="py-6 px-2 border border-dashed rounded-md border-muted-foreground/30 bg-muted/30 flex flex-col items-center justify-center transition-all duration-200 hover:bg-muted/40 hover:border-muted-foreground/50">
           <p className="text-xs text-muted-foreground mb-2">Drop items here</p>
           <DropZone
             key={`empty-${node.id}`}
@@ -298,23 +315,38 @@ const RowNode = ({ node, path, onDrop, onClick }: NodeProps) => {
 };
 
 const ColumnNode = ({ node, path, onDrop, onClick }: NodeProps) => {
-  const [, drag, preview] = useDrag<DragItem>(() => ({
+  const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>(() => ({
     type: ItemTypes.NODE,
     item: { id: node.id, type: node.type, path },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
   }));
 
   return (
     <div
       ref={preview}
-      className="border border-dashed rounded-md p-3 mb-3 bg-background shadow-sm"
+      className={cn(
+        "border border-dashed rounded-md p-3 mb-3 bg-background shadow-sm transition-all duration-200 select-none",
+        isDragging 
+          ? "opacity-50 scale-95 rotate-1 shadow-xl border-primary bg-primary/5" 
+          : "hover:shadow-md hover:bg-accent/20"
+      )}
       onClick={onClick}
     >
       <div
         ref={drag}
-        className="mb-2 cursor-move flex items-center gap-2 text-sm"
+        className={cn(
+          "mb-2 cursor-move flex items-center gap-2 text-sm transition-colors duration-200",
+          isDragging && "text-primary"
+        )}
       >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-        <span className="flex items-center gap-1.5 text-muted-foreground">
+        <GripVertical className={cn("h-4 w-4 text-muted-foreground transition-colors duration-200",
+          isDragging && "text-primary"
+        )} />
+        <span className={cn("flex items-center gap-1.5 text-muted-foreground transition-colors duration-200",
+          isDragging && "text-primary"
+        )}>
           <Columns className="h-3.5 w-3.5" />
           Column
         </span>
@@ -341,7 +373,7 @@ const ColumnNode = ({ node, path, onDrop, onClick }: NodeProps) => {
         );
       })}
       {node.children.length === 0 && (
-        <div className="py-3 px-2 border border-dashed rounded-md border-muted-foreground/30 bg-muted/10 flex flex-col items-center justify-center">
+        <div className="py-6 px-2 border border-dashed rounded-md border-muted-foreground/30 bg-muted/10 flex flex-col items-center justify-center transition-all duration-200 hover:bg-muted/20 hover:border-muted-foreground/50">
           <p className="text-xs text-muted-foreground mb-2">Drop items here</p>
           <DropZone
             key={`empty-${node.id}`}
@@ -356,21 +388,35 @@ const ColumnNode = ({ node, path, onDrop, onClick }: NodeProps) => {
 };
 
 const TextNode = ({ node, path, onClick }: NodeProps) => {
-  const [, drag, preview] = useDrag<DragItem>(() => ({
+  const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>(() => ({
     type: ItemTypes.NODE,
     item: { id: node.id, type: node.type, path },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
   }));
+  
   return (
     <div
       ref={preview}
-      className="p-3 bg-card rounded-md shadow-sm mb-3 border"
+      className={cn(
+        "p-3 bg-card rounded-md shadow-sm mb-3 border transition-all duration-200 select-none",
+        isDragging 
+          ? "opacity-50 scale-95 rotate-1 shadow-xl border-primary bg-primary/5" 
+          : "hover:shadow-md hover:bg-accent/20"
+      )}
       onClick={onClick}
     >
       <div
         ref={drag}
-        className="cursor-move text-muted-foreground text-xs flex items-center gap-1.5 mb-2"
+        className={cn(
+          "cursor-move text-muted-foreground text-xs flex items-center gap-1.5 mb-2 transition-colors duration-200",
+          isDragging && "text-primary"
+        )}
       >
-        <GripVertical className="h-3.5 w-3.5" />
+        <GripVertical className={cn("h-3.5 w-3.5 transition-colors duration-200",
+          isDragging && "text-primary"
+        )} />
         <span className="flex items-center gap-1">
           <Type className="h-3 w-3" />
           Text
@@ -385,22 +431,35 @@ const TextNode = ({ node, path, onClick }: NodeProps) => {
 };
 
 const ImageNode = ({ node, path, onClick }: NodeProps) => {
-  const [, drag, preview] = useDrag<DragItem>(() => ({
+  const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>(() => ({
     type: ItemTypes.NODE,
     item: { id: node.id, type: node.type, path },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
   }));
 
   return (
     <div
       ref={preview}
-      className="p-3 bg-card rounded-md shadow-sm mb-3 border"
+      className={cn(
+        "p-3 bg-card rounded-md shadow-sm mb-3 border transition-all duration-200 select-none",
+        isDragging 
+          ? "opacity-50 scale-95 rotate-1 shadow-xl border-primary bg-primary/5" 
+          : "hover:shadow-md hover:bg-accent/20"
+      )}
       onClick={onClick}
     >
       <div
         ref={drag}
-        className="cursor-move text-muted-foreground text-xs flex items-center gap-1.5 mb-2"
+        className={cn(
+          "cursor-move text-muted-foreground text-xs flex items-center gap-1.5 mb-2 transition-colors duration-200",
+          isDragging && "text-primary"
+        )}
       >
-        <GripVertical className="h-3.5 w-3.5" />
+        <GripVertical className={cn("h-3.5 w-3.5 transition-colors duration-200",
+          isDragging && "text-primary"
+        )} />
         <span className="flex items-center gap-1">
           <ImageIcon className="h-3 w-3" />
           Image
@@ -555,6 +614,111 @@ const NodeSettings = ({ selectedNode, onUpdateNode }: NodeSettingsProps) => {
  Main Builder component
 -------------------------------------------------------------------*/
 
+// Canvas component that uses the DnD hooks
+const CanvasArea = ({ 
+  layout, 
+  handleDrop, 
+  handleNodeSelect 
+}: { 
+  layout: BuilderNode[]; 
+  handleDrop: (item: DragItem, path: string) => void;
+  handleNodeSelect: (path: string) => void;
+}) => {
+  // Canvas drop zone configuration
+  const [{ isCanvasOver, canCanvasDrop }, canvasDrop] = useDrop<DragItem, void, { isCanvasOver: boolean; canCanvasDrop: boolean }>(() => ({
+    accept: ItemTypes.NODE,
+    drop: (item: DragItem, monitor) => {
+      if (monitor.didDrop()) return; // Prevent double drops
+      // Drop at the end of the layout when dropped on canvas
+      const dropPath = layout.length.toString();
+      handleDrop(item, dropPath);
+    },
+    collect: (monitor) => ({
+      isCanvasOver: monitor.isOver({ shallow: true }),
+      canCanvasDrop: monitor.canDrop(),
+    }),
+  }), [layout.length, handleDrop]);
+
+  return (
+    <CardContent 
+      ref={canvasDrop}
+      className={cn(
+        "min-h-[400px] transition-all duration-300 relative",
+        isCanvasOver && canCanvasDrop 
+          ? "bg-primary/10 border-primary/50" 
+          : "",
+        canCanvasDrop && layout.length === 0
+          ? "border-2 border-dashed border-primary/30"
+          : ""
+      )}
+    >
+      {/* Canvas overlay when dragging */}
+      {isCanvasOver && canCanvasDrop && (
+        <div className="absolute inset-0 bg-primary/5 border-2 border-dashed border-primary/30 rounded-lg flex items-center justify-center z-10 pointer-events-none">
+          <div className="bg-primary/90 text-white px-4 py-2 rounded-lg font-medium animate-bounce">
+            Drop here to add to canvas
+          </div>
+        </div>
+      )}
+      
+      {/* initial dropzone */}
+      {layout.length === 0 && (
+        <div className={cn(
+          "flex flex-col items-center justify-center h-[300px] border-2 border-dashed rounded-lg transition-all duration-200",
+          isCanvasOver && canCanvasDrop
+            ? "border-primary bg-primary/5 scale-105"
+            : "border-muted-foreground/20 bg-muted/5 hover:bg-muted/10 hover:border-muted-foreground/30"
+        )}>
+          <p className={cn(
+            "mb-4 text-center transition-colors duration-200",
+            isCanvasOver && canCanvasDrop 
+              ? "text-primary font-medium animate-pulse" 
+              : "text-muted-foreground animate-pulse"
+          )}>
+            Drag components here to start building
+          </p>
+          <div className="w-full h-16 flex items-center justify-center">
+            <DropZone
+              key="initial-dropzone"
+              path="0"
+              onDrop={handleDrop}
+              isLast
+            />
+          </div>
+        </div>
+      )}
+      {layout.map((node, idx) => {
+        const path = `${idx}`;
+        return (
+          <div key={node.id}>
+            <DropZone
+              key={`dropzone-before-${node.id}`}
+              data-path={path}
+              path={path}
+              onDrop={handleDrop}
+            />
+            <NodeRenderer
+              node={node}
+              path={path}
+              onDrop={handleDrop}
+              onClick={() => handleNodeSelect(path)}
+            />
+            {/* last dropzone */}
+            {idx === layout.length - 1 && (
+              <DropZone
+                key={`dropzone-after-${node.id}`}
+                path={`${idx + 1}-end`}
+                isLast
+                onDrop={handleDrop}
+              />
+            )}
+          </div>
+        );
+      })}
+    </CardContent>
+  );
+};
+
 export default function HtmlBuilderRoute() {
   const [layout, setLayout] = useState<BuilderNode[]>([]);
   const [selectedNodePath, setSelectedNodePath] = useState<string | null>(null);
@@ -568,7 +732,6 @@ export default function HtmlBuilderRoute() {
       const dropPathIndices = dropZonePathStr.includes("end")
         ? pathToIndices(dropZonePathStr.replace("-end", ""))
         : pathToIndices(dropZonePathStr);
-      console.log("handleDrop", dragItem, dropPathIndices);
 
       // Use functional setState to guarantee we're using the latest state
       setLayout((currentLayout) => {
@@ -582,8 +745,7 @@ export default function HtmlBuilderRoute() {
           itemNode = {
             id: dragItem.id,
             type: dragItem.type,
-            children:
-              dragItem.type === "text" || dragItem.type === "image" ? [] : [],
+            children: dragItem.type === "text" || dragItem.type === "image" ? [] : [],
           };
         } else if (dragItem.path) {
           console.log("from existing", dragItem);
@@ -653,52 +815,11 @@ export default function HtmlBuilderRoute() {
                 <CardTitle>Canvas</CardTitle>
                 <CardDescription>Your layout will appear here</CardDescription>
               </CardHeader>
-              <CardContent className="min-h-[400px]">
-                {/* initial dropzone */}
-                {layout.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-[300px] border-2 border-dashed rounded-lg border-muted-foreground/20 bg-muted/5">
-                    <p className="text-muted-foreground mb-4">
-                      Drag components here to start building
-                    </p>
-                    <div className="w-full h-8 flex items-center justify-center">
-                      <DropZone
-                        key="initial-dropzone"
-                        path="0"
-                        onDrop={handleDrop}
-                        isLast
-                      />
-                    </div>
-                  </div>
-                )}
-                {layout.map((node, idx) => {
-                  const path = `${idx}`;
-                  return (
-                    <div key={node.id}>
-                      <DropZone
-                        key={`dropzone-before-${node.id}`}
-                        data-path={path}
-                        path={path}
-                        onDrop={handleDrop}
-                      />
-                      <NodeRenderer
-                        node={node}
-                        path={path}
-                        onDrop={handleDrop}
-                        onClick={() => handleNodeSelect(path)}
-                      />
-                      {/* last dropzone */}
-                      {idx === layout.length - 1 && (
-                        <DropZone
-                          key={`dropzone-after-${node.id}`}
-                          path={`${idx + 1}`}
-                          isLast
-                          onDrop={handleDrop}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </CardContent>
+              <CanvasArea 
+                layout={layout} 
+                handleDrop={handleDrop} 
+                handleNodeSelect={handleNodeSelect} 
+              />
             </Card>
           </Grid.Cell>
 
