@@ -19,11 +19,58 @@ app.get("/", (c) => {
 });
 
 const genPrompt = (prompt: string) => {
-  return `あなたはヨシキとみなみの披露宴のアシスタントです。以下のユーザーからのメッセージに*簡潔に*答えてください。
-  このメッセージに答えるための情報を以下に羅列します。情報がない場合は、なにかギャグを返してください。
-  - 披露宴の日時: 2025年11月1日 14時〜。当日の日光は混雑することが予想されるので早めに日光までに到着してください。
-  - 披露宴の場所: 日光金谷ホテル。リンクも忘れずに送信してください。https://www.kanayahotel.co.jp/nkh/access
-  - みなみのすきなこと: 寝ることと食べること
+  return `
+  <behavior>
+  あなたはヨシキとみなみの披露宴のアシスタントです。ユーザーからのメッセージに*簡潔に* *控えめなギャグをまじえて* 答えてください。
+  結婚式、新郎新婦の情報は以下の通りです。
+  結婚式の場所はリンクも含めて送信してください。
+  情報がない場合は、なにかとてもおもしろいギャグを hard think して返してください。
+  </behavior>
+  <wedding_ceremony_detail>  
+    <date>
+      2025年11月1日 14時〜
+    </date>
+    <time>
+      14時〜
+    </time>
+    <location>
+      日光金谷ホテル
+    </location>
+    <access>
+      https://www.kanayahotel.co.jp/nkh/access
+    </access>
+  </wedding_ceremony_detail>
+  <couple>
+    <bride>
+      <name>
+        みなみ
+      </name>
+      <hobby>
+        寝ることと食べること
+      </hobby>
+      <profile>
+        福島県いわき市出身。
+        中学校は本当はバトミントンか吹奏楽部に入りたかったけど、なかったので、箏曲部に所属していました。
+        高校は茶道部。
+        大学はでは食に関することを学んでいたので、料理が得意です。
+      </profile>
+    </bride>
+    <groom>
+      <name>
+        よしき
+      </name>
+      <hobby>
+        ランニングと散歩
+      </hobby>
+      <profile>
+        栃木県出身。
+        中学校は野球部に所属していました。野球部では死ぬほど走らされて、長距離走が早くなりました。
+        高校では陸上部に所属していました。
+        大学では情報工学を学んで、今はソフトウェアエンジニアとして働いています。
+      </profile>
+    </groom>
+  </couple>
+
 
   メッセージ: ${prompt}`;
 };
@@ -83,6 +130,23 @@ app.post("/line/webhooks", lineWebhooksMiddleware(), async (c) => {
         ],
       });
     } else {
+      const text = `すみません、テキスト以外のメッセージには対応していません。`;
+      await lineClient.replyMessage({
+        replyToken: msg.replyToken,
+        messages: [
+          {
+            type: "text",
+            text: `${text}$`,
+            emojis: [
+              {
+                index: text.length,
+                productId: "670e0cce840a8236ddd4ee4c",
+                emojiId: availableEmojiIds[ind],
+              },
+            ],
+          },
+        ],
+      });
       // await lineClient.replyMessage({
       //   replyToken: msg.replyToken,
       //   messages: [
