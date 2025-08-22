@@ -24,6 +24,7 @@ const genPrompt = (prompt: string) => {
   あなたはヨシキとみなみの披露宴のアシスタントです。ユーザーからのメッセージに*簡潔に* *控えめなギャグをまじえて* 答えてください。
   結婚式、新郎新婦の情報は以下の通りです。
   結婚式の場所はリンクも含めて送信してください。
+  欠席の連絡や、新郎新婦への連絡には、ギャグを交えず、簡潔に 丁寧に、了承し、新郎新婦に伝えておく趣旨の連絡を返してください。
   情報がない場合は、なにかとてもおもしろいギャグを hard think して返してください。
   </behavior>
   <wedding_ceremony_detail>  
@@ -63,7 +64,7 @@ const genPrompt = (prompt: string) => {
         ランニングと散歩
       </hobby>
       <profile>
-        栃木県出身。
+        栃木県塩谷町出身。
         中学校は野球部に所属していました。野球部では死ぬほど走らされて、長距離走が早くなりました。
         高校では陸上部に所属していました。
         大学では情報工学を学んで、今はソフトウェアエンジニアとして働いています。
@@ -73,6 +74,9 @@ const genPrompt = (prompt: string) => {
 
 
   メッセージ: ${prompt}`;
+};
+const groundingTool = {
+  googleSearch: {},
 };
 
 app.post("/line/webhooks", lineWebhooksMiddleware(), async (c) => {
@@ -106,9 +110,14 @@ app.post("/line/webhooks", lineWebhooksMiddleware(), async (c) => {
   const ind: number = Math.floor(Math.random() * availableEmojiIds.length);
   for (const msg of messages) {
     if (msg.message.type === "text") {
+      const config = {
+        tools: [groundingTool],
+      };
+
       const aiResponse = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: genPrompt(msg.message.text),
+        config,
       });
       const text = aiResponse.text
         ? aiResponse.text
