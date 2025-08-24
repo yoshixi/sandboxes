@@ -26,3 +26,14 @@ To deploy:
 npm install
 vc deploy
 ```
+
+## Drizzle ORM
+
+https://orm.drizzle.team/docs/tutorials/drizzle-with-turso
+
+```sh
+npx drizzle-kit generate
+npx drizzle-kit migrate
+
+# don't do push
+```
