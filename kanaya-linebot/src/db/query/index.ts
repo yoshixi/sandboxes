@@ -1,4 +1,4 @@
-import { desc, eq, getTableColumns, gt, sql } from "drizzle-orm";
+import { desc, eq, and, gt } from "drizzle-orm";
 
 import { db } from "../index.js";
 import {
@@ -21,6 +21,7 @@ export async function getLineMessageByTalkId(
   role: string;
   createdAt: Date | null;
 }> | null> {
+  // Query: line messages by talkId and timestamp is greater than 24 hours ago
   return db
     .select({
       talkId: lineMessagesTable.talkId,
@@ -30,7 +31,15 @@ export async function getLineMessageByTalkId(
       createdAt: lineMessagesTable.createdAt,
     })
     .from(lineMessagesTable)
-    .where(eq(lineMessagesTable.talkId, talkId))
+    .where(
+      and(
+        eq(lineMessagesTable.talkId, talkId),
+        gt(
+          lineMessagesTable.timestamp,
+          new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours ago
+        )
+      )
+    )
     .orderBy(desc(lineMessagesTable.createdAt))
     .limit(limit);
 }
