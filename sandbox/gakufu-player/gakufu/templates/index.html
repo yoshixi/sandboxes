@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>楽譜 → MP3</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23f4ecdf' width='32' height='32'/%3E%3Cpath d='M12 24V8l12-2v16' fill='none' stroke='%23c4452d' stroke-width='2'/%3E%3Ccircle cx='10' cy='24' r='3.2' fill='%231d1a17'/%3E%3Ccircle cx='22' cy='22' r='3.2' fill='%231d1a17'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f7f1e6;
+      --paper-2: #fffaf3;
+      --ink: #221c16;
+      --muted: #6d6054;
+      --line: #e0d3c0;
+      --cinnabar: #c4452d;
+      --cinnabar-dark: #8d2f1d;
+      --good: #1d6a43;
+      --shadow: 0 18px 50px rgba(70, 42, 18, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: Outfit, "Avenir Next", "Segoe UI", sans-serif;
+      background-color: #efe4d2;
+      background-image: repeating-linear-gradient(
+        to bottom,
+        transparent,
+        transparent 27px,
+        rgba(90, 60, 30, 0.05) 28px
+      );
+    }
+    .wrap {
+      width: min(1080px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 64px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+    .seal {
+      width: 54px;
+      height: 54px;
+      border: 2px solid var(--cinnabar);
+      color: var(--cinnabar);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 22px;
+      transform: rotate(-8deg);
+      flex: none;
+    }
+    h1 {
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 680;
+      font-size: clamp(40px, 6vw, 64px);
+      line-height: 0.95;
+      margin: 0 0 8px;
+      letter-spacing: -0.03em;
+    }
+    .lede {
+      margin: 0;
+      max-width: 46ch;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.45;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 18px;
+    }
+    .card {
+      background: var(--paper-2);
+      border: 1px solid rgba(70, 42, 18, 0.08);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+    .drop {
+      display: block;
+      border: 1.5px dashed #c9b59a;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.45), rgba(255,255,255,0)),
+        var(--paper);
+      border-radius: 16px;
+      min-height: 180px;
+      padding: 22px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .drop.hot { border-color: var(--cinnabar); background: #fff6ef; }
+    .drop strong { display: block; font-size: 18px; margin-top: 8px; }
+    .drop span { color: var(--muted); font-size: 14px; }
+    input[type="file"] {
+      display: block;
+      margin: 14px auto 0;
+      max-width: 100%;
+      font: inherit;
+    }
+    .staff {
+      width: 168px;
+      height: 52px;
+      margin: 0 auto;
+    }
+    label.field {
+      display: block;
+      margin-top: 16px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .hint { display: block; font-weight: 400; color: var(--muted); margin-top: 3px; }
+    input[type="number"] {
+      margin-top: 8px;
+      width: 140px;
+      font: inherit;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: white;
+    }
+    .check {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-top: 14px;
+      font-size: 14px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    button, .link-button {
+      font: inherit;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 11px 16px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    button.primary { background: var(--cinnabar); color: white; }
+    button.primary:hover { background: var(--cinnabar-dark); }
+    button.ghost, .link-button {
+      background: transparent;
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    button:disabled { opacity: 0.55; cursor: progress; }
+    .status {
+      min-height: 1.4em;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .status.error { color: var(--cinnabar-dark); }
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--cinnabar);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    #result h2 {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 34px;
+      margin: 0 0 6px;
+      letter-spacing: -0.03em;
+    }
+    .meta { margin: 0 0 14px; color: var(--muted); }
+    audio { width: 100%; margin: 8px 0 12px; }
+    canvas {
+      width: 100%;
+      height: 168px;
+      display: block;
+      background: var(--paper);
+      border-radius: 12px;
+      border: 1px solid var(--line);
+    }
+    .notes {
+      font-variant-numeric: tabular-nums;
+      line-height: 1.7;
+      margin: 12px 0 0;
+    }
+    .warnings { margin: 12px 0 0; padding-left: 18px; color: var(--cinnabar-dark); }
+    .hidden { display: none; }
+    footer {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    @media (max-width: 800px) {
+      header { align-items: start; }
+      .layout { grid-template-columns: 1fr; }
+      .seal { width: 44px; height: 44px; font-size: 18px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>楽譜 → MP3</h1>
+        <p class="lede">Upload a photo, scan, or PDF of sheet music. The app reads the notes and makes an MP3 you can play.</p>
+      </div>
+      <div class="seal" aria-hidden="true">譜</div>
+    </header>
+    <div class="layout">
+      <section class="card">
+        <form id="form">
+          <label class="drop" id="drop">
+            <svg class="staff" viewBox="0 0 168 52" aria-hidden="true">
+              <g fill="none" stroke="#8a7764" stroke-width="1">
+                <path d="M4 10h160M4 18h160M4 26h160M4 34h160M4 42h160"/>
+              </g>
+              <circle cx="36" cy="34" r="5" fill="#221c16"/>
+              <circle cx="68" cy="26" r="5" fill="#221c16"/>
+              <circle cx="100" cy="18" r="5" fill="#c4452d"/>
+              <path d="M41 34V16M73 26V8M105 18V6" stroke="#221c16" stroke-width="1.6"/>
+            </svg>
+            <strong>Drop a page of 楽譜</strong>
+            <span>PNG, JPG, WEBP, PDF, MusicXML, or MIDI. Up to 20 MB.</span>
+            <input id="file" name="file" type="file" accept=".png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp,.pdf,.musicxml,.xml,.mxl,.mid,.midi">
+          </label>
+          <label class="field">
+            Tempo
+            <span class="hint">Leave blank to use a tempo saved in the file. A photo usually plays at 120 BPM unless you type the marking.</span>
+            <input id="bpm" name="bpm" type="number" min="20" max="300" step="1" placeholder="Auto" inputmode="numeric">
+          </label>
+          <label class="check">
+            <input id="deskew" name="deskew" type="checkbox" value="on">
+            <span>Straighten a tilted photo<span class="hint">Leave this off for a scan or a page that is already straight.</span></span>
+          </label>
+          <div class="actions">
+            <button class="primary" id="read" type="submit">Read and make MP3</button>
+            <button class="ghost" id="sample" type="button">Play さくらさくら</button>
+          </div>
+        </form>
+        <p class="status" id="status" role="status"></p>
+      </section>
+      <section class="card" id="result">
+        <p class="eyebrow" id="eyebrow">What it read</p>
+        <h2 id="title">Waiting for a score</h2>
+        <p class="meta" id="meta">Printed five-line staff works best. A page often takes a few minutes, and the first read downloads the recognition models.</p>
+        <audio id="player" class="hidden" controls></audio>
+        <canvas id="roll" class="hidden" height="168" aria-label="Piano roll of the notes that were read"></canvas>
+        <p class="notes" id="note-line"></p>
+        <ul class="warnings hidden" id="warnings"></ul>
+        <div class="actions hidden" id="downloads">
+          <a class="link-button" id="download" href="#" download>Download MP3</a>
+          <a class="link-button hidden" id="xml" href="#" download="score.musicxml">Download MusicXML</a>
+        </div>
+      </section>
+    </div>
+    <footer>
+      Photos and PDFs are read with optical music recognition. MusicXML and MIDI are played directly. Sound is a built-in piano synth, encoded to MP3.
+    </footer>
+  </div>
+  <script>
+    const form = document.querySelector("#form");
+    const fileInput = document.querySelector("#file");
+    const drop = document.querySelector("#drop");
+    const status = document.querySelector("#status");
+    const readButton = document.querySelector("#read");
+    const sampleButton = document.querySelector("#sample");
+    const result = document.querySelector("#result");
+
+    drop.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      drop.classList.add("hot");
+    });
+    drop.addEventListener("dragleave", () => drop.classList.remove("hot"));
+    drop.addEventListener("drop", (event) => {
+      event.preventDefault();
+      drop.classList.remove("hot");
+      const file = event.dataTransfer.files[0];
+      if (!file) return;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!fileInput.files.length) {
+        setStatus("Choose a score file first.", true);
+        return;
+      }
+      const data = new FormData(form);
+      if (!data.get("bpm")) data.delete("bpm");
+      if (!document.querySelector("#deskew").checked) data.delete("deskew");
+      run("/api/transcribe", data, "Reading the sheet and writing the MP3. A page of notation can take a few minutes.");
+    });
+
+    sampleButton.addEventListener("click", () => {
+      const data = new FormData();
+      const bpm = document.querySelector("#bpm").value.trim();
+      if (bpm) data.set("bpm", bpm);
+      run("/api/sample", data, "Writing the sample MP3.");
+    });
+
+    async function run(url, data, pending) {
+      setBusy(true);
+      setStatus(pending, false);
+      try {
+        const response = await fetch(url, { method: "POST", body: data });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const detail = typeof body.detail === "string" ? body.detail : "Could not read that file.";
+          throw new Error(detail);
+        }
+        show(body);
+        setStatus("", false);
+      } catch (error) {
+        setStatus(error.message || "Could not read that file.", true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function show(body) {
+      document.querySelector("#title").textContent = body.title;
+      document.querySelector("#meta").textContent =
+        `${formatTime(body.duration)} · ${Math.round(body.bpm)} BPM · ${body.noteCount} notes`;
+      const player = document.querySelector("#player");
+      player.src = body.audioUrl;
+      player.classList.remove("hidden");
+      const download = document.querySelector("#download");
+      download.href = body.audioUrl;
+      download.download = body.downloadName || "gakufu.mp3";
+      document.querySelector("#downloads").classList.remove("hidden");
+      const xml = document.querySelector("#xml");
+      if (body.musicxmlUrl) {
+        xml.href = body.musicxmlUrl;
+        xml.classList.remove("hidden");
+      } else {
+        xml.classList.add("hidden");
+      }
+      const names = body.notes.slice(0, 64).map((note) => note.name).join("  ");
+      const extra = body.noteCount > 64 ? `  … ${body.noteCount} notes` : "";
+      document.querySelector("#note-line").textContent = names + extra;
+      const warnings = document.querySelector("#warnings");
+      warnings.innerHTML = "";
+      if (body.warnings && body.warnings.length) {
+        warnings.classList.remove("hidden");
+        for (const warning of body.warnings) {
+          const item = document.createElement("li");
+          item.textContent = warning;
+          warnings.appendChild(item);
+        }
+      } else {
+        warnings.classList.add("hidden");
+      }
+      drawRoll(body.notes);
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      result.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+    }
+
+    function drawRoll(notes) {
+      const canvas = document.querySelector("#roll");
+      canvas.classList.remove("hidden");
+      const width = canvas.clientWidth || 640;
+      const height = 168;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#f7f1e6";
+      ctx.fillRect(0, 0, width, height);
+      if (!notes.length) return;
+      const end = Math.max(...notes.map((note) => note.start + note.duration), 0.1);
+      const minMidi = Math.min(...notes.map((note) => note.midi)) - 2;
+      const maxMidi = Math.max(...notes.map((note) => note.midi)) + 2;
+      const span = Math.max(4, maxMidi - minMidi);
+      ctx.strokeStyle = "rgba(90, 60, 30, 0.15)";
+      ctx.lineWidth = 1;
+      for (let second = 0; second <= end; second += 2) {
+        const x = 8 + (second / end) * (width - 16);
+        ctx.beginPath();
+        ctx.moveTo(x, 8);
+        ctx.lineTo(x, height - 8);
+        ctx.stroke();
+      }
+      for (const note of notes) {
+        const x = 8 + (note.start / end) * (width - 16);
+        const w = Math.max(3, (note.duration / end) * (width - 16) - 2);
+        const y = height - 12 - ((note.midi - minMidi) / span) * (height - 24);
+        ctx.fillStyle = "#c4452d";
+        ctx.fillRect(x, y - 4, w, 8);
+      }
+    }
+
+    function formatTime(seconds) {
+      const total = Math.max(0, Math.round(seconds));
+      return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+    }
+
+    function setStatus(message, isError) {
+      status.textContent = message;
+      status.classList.toggle("error", Boolean(isError));
+    }
+
+    function setBusy(busy) {
+      readButton.disabled = busy;
+      sampleButton.disabled = busy;
+      result.setAttribute("aria-busy", busy ? "true" : "false");
+    }
+  </script>
+</body>
+</html>
