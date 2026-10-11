@@ -8,7 +8,32 @@ A small sandbox app that looks at sheet music and writes an MP3 of what it reads
 
 Handwritten scores, guitar tabs, and chord charts are outside what the reader was trained on.
 
-## Run
+## Run with Nix
+
+From this directory:
+
+```bash
+cd sandbox/gakufu-player
+nix develop
+```
+
+Flakes need to be enabled once:
+
+```bash
+mkdir -p ~/.config/nix
+echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+```
+
+`nix develop` provides Python 3.12, ffmpeg, and CA certificates, then creates `.venv` and installs `requirements.txt`. The first entry downloads the Python packages. Later entries reuse `.venv` until `requirements.txt` changes.
+
+Then:
+
+```bash
+python -m gakufu serve
+pytest
+```
+
+## Run without Nix
 
 ```bash
 cd sandbox/gakufu-player
