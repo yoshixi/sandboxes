@@ -23,12 +23,36 @@ def prepare_image(source: Path, dest: Path) -> Path:
             turned = ImageOps.exif_transpose(image)
             if turned is None:
                 turned = image
-            rgb = turned.convert("RGB")
+            rgb = _with_page_margins(turned.convert("RGB"))
             dest.parent.mkdir(parents=True, exist_ok=True)
             rgb.save(dest, "PNG")
     except Exception as exc:
         raise ScoreReadError(f"Could not open this image: {exc}") from exc
     return dest
+
+
+def _with_page_margins(image: Image.Image) -> Image.Image:
+    """Put a very flat crop on a blank page so staff lines can be found.
+
+    A tight screenshot of one system is short and wide. The reader was trained
+    on full pages, and that shape makes it split one staff into several.
+    """
+    width, height = image.size
+    aspect = width / max(height, 1)
+    if 0.4 <= aspect <= 2.5:
+        return image
+    if aspect > 2.5:
+        page_width = max(width + 240, int(height * 5))
+        page_height = max(int(page_width / 1.45), height + 500)
+    else:
+        page_height = max(height + 240, int(width * 1.8))
+        page_width = max(int(page_height / 1.45), width + 240)
+    page = Image.new("RGB", (page_width, page_height), "white")
+    x = (page_width - width) // 2
+    y = max(80, min((page_height - height) // 5, 220))
+    page.paste(image, (x, y))
+    logger.info("Added page margins around a %sx%s crop", width, height)
+    return page
 
 
 def render_pdf(source: Path, work: Path) -> list[Path]:

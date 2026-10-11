@@ -17,13 +17,13 @@ source .venv/bin/activate
 pip install -r requirements.txt
 # oemer asks for the CUDA build. This app runs on CPU.
 pip uninstall -y onnxruntime-gpu
-pip install onnxruntime==1.31.0
+pip install onnxruntime==1.27.0
 python -m gakufu serve
 ```
 
 Open http://127.0.0.1:8000. Drop a page of 楽譜, or press **Play さくらさくら** to hear the built-in sample.
 
-The first photo also downloads about 110 MB of recognition models into the installed `oemer` package. One page often takes a few minutes on CPU. Tick **Straighten a tilted photo** only when the page is skewed.
+The first photo also downloads about 110 MB of recognition models into the installed `oemer` package. One page often takes a few minutes on CPU. Tick **Straighten a tilted photo** only when the page is skewed. A very flat crop of a single system is placed on a blank page first, which is how the reader was trained. A photographed tempo mark is often missed, so type the BPM if you want it.
 
 ## Command line
 
