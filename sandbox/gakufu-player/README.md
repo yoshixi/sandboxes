@@ -24,7 +24,7 @@ mkdir -p ~/.config/nix
 echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
 ```
 
-`nix develop` provides Python 3.12, ffmpeg, and CA certificates, then creates `.venv` and installs `requirements.txt`. The first entry downloads the Python packages. Later entries reuse `.venv` until `requirements.txt` changes.
+`nix develop` provides Python 3.12, ffmpeg, and [uv](https://docs.astral.sh/uv/). Nix's Python does not include `pip`, so the shell uses `uv` to create `.venv` and install `requirements.txt`. The first entry downloads the Python packages. Later entries reuse `.venv` until `requirements.txt` changes. A broken `.venv` from an earlier attempt is recreated.
 
 Then:
 
